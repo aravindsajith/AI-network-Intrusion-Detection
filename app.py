@@ -516,6 +516,25 @@ elif page == "Model Performance":
     try:
 
         comparison = pd.read_csv("model_comparison.csv")
+        # Fix comparison CSV column names
+comparison.columns = comparison.columns.str.strip()
+
+# Identify the F1-score column
+f1_column = next(
+    (col for col in comparison.columns if "f1" in col.lower()),
+    None
+)
+
+if f1_column is None:
+    st.error("F1 Score column not found in model_comparison.csv")
+    st.write("Available columns:", comparison.columns.tolist())
+    st.stop()
+
+# Rename it to the expected name
+comparison.rename(
+    columns={f1_column: "F1 Score (attack)"},
+    inplace=True
+)
 
         st.subheader("Complete Model Comparison")
 
