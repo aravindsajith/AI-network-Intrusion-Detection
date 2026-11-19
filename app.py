@@ -26,7 +26,7 @@ st.set_page_config(
 
 BG = "#000000"
 SURFACE = "#3E3E3E"
-BORDER = "#2C7EF4"
+BORDER = "#545454"
 GRID = "#657997"
 TEXT = "#F2F2F4"
 MUTED = "#9699BF"
