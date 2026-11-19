@@ -68,10 +68,11 @@ hr {{
     border-color: {BORDER};
 }}
 [data-testid="stMetric"] {{
-    background: linear-gradient(145deg, #172233, #121A26);
-    border: 1px solid {BORDER};
-    border-radius: 14px;
-    padding: 15px 17px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid {BORDER};
+    border-radius: 0;
+    padding: 10px 4px 13px 4px;
 }}
 [data-testid="stMetricLabel"] {{
     color: {MUTED} !important;
@@ -107,14 +108,14 @@ hr {{
     color: white;
 }}
 [data-testid="stDataFrame"], [data-testid="stTable"] {{
-    border: 1px solid {BORDER};
-    border-radius: 12px;
+    border: 0;
+    border-radius: 4px;
     overflow: hidden;
 }}
 [data-testid="stFileUploader"] section {{
-    background: {PANEL};
-    border: 1px dashed #40536D;
-    border-radius: 12px;
+    background: #101722;
+    border: 1px dashed #344255;
+    border-radius: 8px;
 }}
 [data-testid="stAlert"] {{
     border-radius: 11px;
@@ -123,25 +124,25 @@ hr {{
     color: {MUTED};
 }}
 [data-testid="stPlotlyChart"], [data-testid="stPyplot"], [data-testid="stVegaLiteChart"] {{
-    background: {PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 12px;
-    padding: 7px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    padding: 0;
 }}
 div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background: {PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 13px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
 }}
 /* Sidebar radio navigation */
 [data-testid="stSidebar"] [role="radiogroup"] {{
     gap: 5px;
 }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{
-    background: #141E2B;
-    border: 1px solid transparent;
-    border-radius: 9px;
-    padding: 9px 11px;
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    padding: 8px 10px;
 }}
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
     border-color: #40536D;
@@ -155,11 +156,12 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     text-transform: uppercase;
 }}
 .hero {{
-    background: linear-gradient(115deg, #172638 0%, #121A26 58%, #17212E 100%);
-    border: 1px solid #2B4058;
-    border-radius: 18px;
-    padding: 25px 27px;
-    margin: 4px 0 20px 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid {BORDER};
+    border-radius: 0;
+    padding: 12px 0 22px 0;
+    margin: 4px 0 24px 0;
 }}
 .hero-title {{
     color: #F4F7FA;
@@ -184,11 +186,12 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     letter-spacing: 0.05em;
 }}
 .info-card {{
-    background: {PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 13px;
-    padding: 16px 17px;
-    min-height: 115px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid {BORDER};
+    border-radius: 0;
+    padding: 12px 2px 14px 2px;
+    min-height: 92px;
 }}
 .info-card-title {{
     color: {MUTED};
@@ -260,8 +263,8 @@ def styled_table(df):
 
 
 def style_matplotlib(fig, ax):
-    fig.patch.set_facecolor(PANEL)
-    ax.set_facecolor(PANEL)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
     ax.tick_params(colors="#D6DFEA", labelsize=8)
     ax.xaxis.label.set_color("#C8D3E0")
     ax.yaxis.label.set_color("#C8D3E0")
@@ -378,13 +381,8 @@ with st.sidebar:
     )
 
     st.divider()
-    st.markdown("**MODEL STATUS**")
-    st.markdown(
-        '<span class="pill">● SVM READY</span> '
-        '<span class="pill">● CNN READY</span> '
-        '<span class="pill">● LSTM READY</span>',
-        unsafe_allow_html=True
-    )
+    st.markdown("**MODELS**")
+    st.caption("SVM  ·  CNN  ·  LSTM")
     st.caption("UNSW-NB15 · Binary classification")
 
 st.markdown(
@@ -441,10 +439,10 @@ if page == "Overview":
         for number, title, description in workflow:
             st.markdown(
                 f"""
-                <div class="info-card" style="min-height:0; margin-bottom:9px;">
-                    <span class="pill">{number}</span>
-                    <b style="color:#F2F5F9; margin-left:8px;">{title}</b>
-                    <div class="info-card-note" style="margin-top:8px;">{description}</div>
+                <div style="padding:10px 0 12px 0; border-bottom:1px solid {BORDER};">
+                    <span style="color:{ACCENT}; font-size:0.76rem; font-weight:700;">{number}</span>
+                    <b style="color:#F2F5F9; margin-left:12px;">{title}</b>
+                    <div class="info-card-note" style="margin:5px 0 0 32px;">{description}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
