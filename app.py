@@ -24,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BG = "#1F1F1F"
+BG = "#0C0A00"
 SURFACE = "#323C4B"
 BORDER = "#2C7EF4"
 GRID = "#867F71"
