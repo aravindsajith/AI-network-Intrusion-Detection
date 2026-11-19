@@ -4,17 +4,26 @@ import pandas as pd
 import numpy as np
 import joblib
 import time
+import matplotlib.pyplot as plt
 
 from tensorflow.keras.models import load_model
+
 from sklearn.metrics import (
     accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
     classification_report,
-    confusion_matrix
+    roc_curve,
+    roc_auc_score,
+    precision_recall_curve,
+    average_precision_score
 )
 
-# --------------------------------------------------
+# ==================================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==================================================
 
 st.set_page_config(
     page_title="AI Network Intrusion Detection",
@@ -22,43 +31,52 @@ st.set_page_config(
     layout="wide"
 )
 
-# --------------------------------------------------
-# CUSTOM DESIGN
-# --------------------------------------------------
+# ==================================================
+# CUSTOM BLACK AND WHITE DESIGN
+# ==================================================
 
 st.markdown("""
 <style>
+
 .stApp {
     background-color: #000000;
-    color: white;
+    color: #FFFFFF;
 }
+
 [data-testid="stSidebar"] {
     background-color: #111111;
 }
-h1, h2, h3, p, label {
-    color: white !important;
+
+h1, h2, h3, h4, p, label {
+    color: #FFFFFF !important;
 }
+
 .stButton > button {
-    background-color: white;
-    color: black;
+    background-color: #FFFFFF;
+    color: #000000;
     border-radius: 6px;
     font-weight: bold;
+    border: none;
 }
+
 .stButton > button:hover {
     background-color: #cccccc;
-    color: black;
+    color: #000000;
 }
+
 [data-testid="stMetric"] {
     background-color: #151515;
     padding: 15px;
     border-radius: 8px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------
+
+# ==================================================
 # LOAD TRAINED MODELS
-# --------------------------------------------------
+# ==================================================
 
 @st.cache_resource
 def load_models():
@@ -74,20 +92,158 @@ def load_models():
 
 
 st.title("AI-Based Network Intrusion Detection")
-st.caption("Machine Learning and Deep Learning | UNSW-NB15 Dataset")
+st.caption(
+    "Machine Learning and Deep Learning | UNSW-NB15 Dataset"
+)
 
 try:
+
     svm, cnn, lstm, scaler, prep = load_models()
+
     st.success("All three models loaded successfully!")
 
 except Exception as e:
-    st.error("Unable to load the trained models.")
+
+    st.error("Unable to load trained models.")
     st.exception(e)
     st.stop()
 
-# --------------------------------------------------
+
+# ==================================================
+# DATA PREPROCESSING
+# ==================================================
+
+def preprocess_data(df):
+
+    X = df.drop(
+        columns=["label", "attack_cat", "id"],
+        errors="ignore"
+    ).copy()
+
+    num_cols = list(prep["num_cols"])
+    cat_cols = list(prep["cat_cols"])
+
+    expected_raw = num_cols + cat_cols
+
+    missing = [
+        col for col in expected_raw
+        if col not in X.columns
+    ]
+
+    extra = [
+        col for col in X.columns
+        if col not in expected_raw
+    ]
+
+    if missing or extra:
+
+        raise ValueError(
+            f"CSV columns do not match training data. "
+            f"Missing: {missing}. Extra: {extra}"
+        )
+
+    X = X[expected_raw]
+
+    X = X.replace(
+        [np.inf, -np.inf],
+        np.nan
+    )
+
+    X[num_cols] = X[num_cols].fillna(
+        prep["medians"]
+    )
+
+    X[cat_cols] = X[cat_cols].fillna("missing")
+
+    X = pd.get_dummies(X)
+
+    X = X.reindex(
+        columns=prep["feature_columns"],
+        fill_value=0
+    )
+
+    X_scaled = scaler.transform(X)
+
+    return X_scaled
+
+
+# ==================================================
+# MODEL PREDICTIONS
+# ==================================================
+
+def predict_model(model_name, X_scaled):
+
+    if model_name == "SVM":
+
+        predictions = svm.predict(X_scaled)
+
+        scores = svm.decision_function(X_scaled)
+
+    elif model_name == "CNN":
+
+        data = X_scaled.astype("float32").reshape(
+            -1, X_scaled.shape[1], 1
+        )
+
+        scores = cnn.predict(
+            data,
+            verbose=0
+        ).ravel()
+
+        predictions = (scores >= 0.5).astype(int)
+
+    else:
+
+        data = X_scaled.astype("float32").reshape(
+            -1, X_scaled.shape[1], 1
+        )
+
+        scores = lstm.predict(
+            data,
+            verbose=0
+        ).ravel()
+
+        predictions = (scores >= 0.5).astype(int)
+
+    return predictions, scores
+
+
+# ==================================================
+# EVALUATION METRICS
+# ==================================================
+
+def calculate_metrics(actual, predicted, scores):
+
+    return {
+        "Accuracy (%)": accuracy_score(
+            actual, predicted
+        ) * 100,
+
+        "Precision (attack)": precision_score(
+            actual, predicted, zero_division=0
+        ),
+
+        "Recall (attack)": recall_score(
+            actual, predicted, zero_division=0
+        ),
+
+        "F1 Score (attack)": f1_score(
+            actual, predicted, zero_division=0
+        ),
+
+        "ROC AUC": roc_auc_score(
+            actual, scores
+        ),
+
+        "PR AUC": average_precision_score(
+            actual, scores
+        )
+    }
+
+
+# ==================================================
 # SIDEBAR NAVIGATION
-# --------------------------------------------------
+# ==================================================
 
 st.sidebar.title("NAVIGATION")
 
@@ -97,14 +253,16 @@ page = st.sidebar.radio(
         "Overview",
         "Intrusion Detection",
         "Model Performance",
+        "Advanced Evaluation",
         "Detection Results",
         "About Project"
     ]
 )
 
-# --------------------------------------------------
-# OVERVIEW
-# --------------------------------------------------
+
+# ==================================================
+# OVERVIEW PAGE
+# ==================================================
 
 if page == "Overview":
 
@@ -112,7 +270,7 @@ if page == "Overview":
 
     st.write("""
     This system uses machine learning and deep learning
-    models to identify normal and malicious network traffic.
+    techniques to identify normal and malicious network traffic.
     """)
 
     c1, c2, c3 = st.columns(3)
@@ -123,7 +281,7 @@ if page == "Overview":
 
     st.divider()
 
-    st.subheader("Available Detection Models")
+    st.subheader("Detection Models")
 
     c1, c2, c3 = st.columns(3)
 
@@ -136,35 +294,49 @@ if page == "Overview":
     c3.markdown("### LSTM")
     c3.write("Long Short-Term Memory")
 
+    st.divider()
+
+    st.subheader("Project Workflow")
+
+    st.write("""
+    1. Upload network traffic dataset.
+    2. Preprocess the uploaded data.
+    3. Select a trained detection model.
+    4. Classify network records.
+    5. Analyze and compare model performance.
+    """)
+
     st.info(
-        "Navigate to Intrusion Detection to upload a CSV "
-        "file and classify network traffic."
+        "This prototype analyzes uploaded CSV records. "
+        "It does not monitor live network traffic."
     )
 
-# --------------------------------------------------
-# INTRUSION DETECTION
-# --------------------------------------------------
+
+# ==================================================
+# INTRUSION DETECTION PAGE
+# ==================================================
 
 elif page == "Intrusion Detection":
 
     st.header("Network Intrusion Detection")
 
     model_name = st.selectbox(
-        "Choose a detection model",
+        "Select Detection Model",
         ["SVM", "CNN", "LSTM"]
     )
 
     uploaded_file = st.file_uploader(
-        "Upload your network traffic CSV file",
+        "Upload UNSW-NB15 CSV Dataset",
         type=["csv"]
     )
 
     if uploaded_file is not None:
 
         try:
+
             df = pd.read_csv(uploaded_file)
 
-            st.subheader("Uploaded Dataset Preview")
+            st.subheader("Dataset Preview")
 
             st.write("Dataset shape:", df.shape)
 
@@ -177,123 +349,17 @@ elif page == "Intrusion Detection":
 
                 with st.spinner("Analyzing network traffic..."):
 
-                    # Save actual labels separately for evaluation
-                    actual_labels = (
-                        df["label"].copy()
-                        if "label" in df.columns
-                        else None
+                    X_scaled = preprocess_data(df)
+
+                    start = time.time()
+
+                    predictions, scores = predict_model(
+                        model_name,
+                        X_scaled
                     )
 
-                    # Remove target and identifier columns
-                    X = df.drop(
-                        columns=["label", "attack_cat", "id"],
-                        errors="ignore"
-                    ).copy()
+                    prediction_time = time.time() - start
 
-                    # Expected original input columns
-                    num_cols = list(prep["num_cols"])
-                    cat_cols = list(prep["cat_cols"])
-
-                    expected_raw = num_cols + cat_cols
-
-                    missing = [
-                        col for col in expected_raw
-                        if col not in X.columns
-                    ]
-
-                    extra = [
-                        col for col in X.columns
-                        if col not in expected_raw
-                    ]
-
-                    if missing or extra:
-
-                        st.error(
-                            "Uploaded CSV columns do not match "
-                            "the training dataset."
-                        )
-
-                        if missing:
-                            st.write("Missing columns:", missing)
-
-                        if extra:
-                            st.write("Unexpected columns:", extra)
-
-                        st.stop()
-
-                    # Match training input schema
-                    X = X[expected_raw]
-
-                    # Handle missing and infinite values
-                    X = X.replace(
-                        [np.inf, -np.inf],
-                        np.nan
-                    )
-
-                    X[num_cols] = X[num_cols].fillna(
-                        prep["medians"]
-                    )
-
-                    X[cat_cols] = X[cat_cols].fillna("missing")
-
-                    # One-hot encoding
-                    X = pd.get_dummies(X)
-
-                    # Match original training features
-                    X = X.reindex(
-                        columns=prep["feature_columns"],
-                        fill_value=0
-                    )
-
-                    # Apply the previously trained scaler
-                    X_scaled = scaler.transform(X)
-
-                    # Prediction
-                    start_time = time.time()
-
-                    if model_name == "SVM":
-
-                        predictions = svm.predict(X_scaled)
-
-                    elif model_name == "CNN":
-
-                        cnn_input = X_scaled.astype(
-                            "float32"
-                        ).reshape(
-                            -1, X_scaled.shape[1], 1
-                        )
-
-                        probabilities = cnn.predict(
-                            cnn_input,
-                            verbose=0
-                        ).ravel()
-
-                        predictions = (
-                            probabilities >= 0.5
-                        ).astype(int)
-
-                    else:
-
-                        lstm_input = X_scaled.astype(
-                            "float32"
-                        ).reshape(
-                            -1, X_scaled.shape[1], 1
-                        )
-
-                        probabilities = lstm.predict(
-                            lstm_input,
-                            verbose=0
-                        ).ravel()
-
-                        predictions = (
-                            probabilities >= 0.5
-                        ).astype(int)
-
-                    prediction_time = (
-                        time.time() - start_time
-                    )
-
-                # Create result dataframe
                 results = df.copy()
 
                 results["Predicted Label"] = predictions
@@ -304,34 +370,76 @@ elif page == "Intrusion Detection":
                     "Normal"
                 )
 
-                # Store results
                 st.session_state["results"] = results
                 st.session_state["predictions"] = predictions
-                st.session_state["actual_labels"] = actual_labels
-                st.session_state["prediction_time"] = prediction_time
+                st.session_state["scores"] = scores
                 st.session_state["selected_model"] = model_name
+                st.session_state["prediction_time"] = prediction_time
 
-                st.success("Intrusion detection completed!")
+                st.session_state["uploaded_labels"] = (
+                    pd.to_numeric(df["label"], errors="coerce")
+                    if "label" in df.columns
+                    else None
+                )
+
+                st.success("Detection completed successfully!")
 
         except Exception as e:
 
-            st.error("An error occurred during detection.")
+            st.error("Error during detection.")
             st.exception(e)
+    
+    if uploaded_file is not None and "df" in locals():
 
-# --------------------------------------------------
-# DETECTION RESULTS
-# --------------------------------------------------
+        if st.button("Evaluate All Models"):
+
+            try:
+
+                with st.spinner("Evaluating all three models..."):
+
+                    X_scaled = preprocess_data(df)
+
+                    all_results = {}
+
+                    for name in ["SVM", "CNN", "LSTM"]:
+
+                        pred, scores = predict_model(
+                            name,
+                            X_scaled
+                        )
+
+                        all_results[name] = {
+                            "predictions": pred,
+                            "scores": scores
+                        }
+
+                    st.session_state["all_model_results"] = all_results
+
+                st.success(
+                    "All three models evaluated successfully!"
+                )
+
+            except Exception as e:
+
+                st.error("Evaluation failed.")
+                st.exception(e)
+
+    # DISPLAY DETECTION RESULTS
 
     if "results" in st.session_state:
 
         results = st.session_state["results"]
+
         predictions = st.session_state["predictions"]
 
         st.divider()
+
         st.subheader("Detection Summary")
 
         total = len(predictions)
+
         attacks = int(np.sum(predictions == 1))
+
         normal = int(np.sum(predictions == 0))
 
         c1, c2, c3 = st.columns(3)
@@ -343,10 +451,8 @@ elif page == "Intrusion Detection":
         st.subheader("Traffic Distribution")
 
         distribution = pd.DataFrame(
-            {
-                "Number of Records": [normal, attacks]
-            },
-            index=["Normal Traffic", "Attack Traffic"]
+            {"Records": [normal, attacks]},
+            index=["Normal", "Attack"]
         )
 
         st.bar_chart(distribution)
@@ -359,10 +465,10 @@ elif page == "Intrusion Detection":
         )
 
         st.download_button(
-            "Download Detection Results",
-            data=results.to_csv(index=False),
-            file_name="intrusion_detection_results.csv",
-            mime="text/csv"
+            "Download Prediction Results",
+            results.to_csv(index=False),
+            "intrusion_detection_results.csv",
+            "text/csv"
         )
 
         st.write(
@@ -375,15 +481,9 @@ elif page == "Intrusion Detection":
             f'{st.session_state["prediction_time"]:.2f} seconds'
         )
 
-        # Evaluate only when valid ground-truth labels exist
-        actual = st.session_state["actual_labels"]
+        actual = st.session_state["uploaded_labels"]
 
         if actual is not None:
-
-            actual = pd.to_numeric(
-                actual,
-                errors="coerce"
-            )
 
             if actual.notna().all() and actual.isin([0, 1]).all():
 
@@ -394,107 +494,52 @@ elif page == "Intrusion Detection":
                     predictions
                 )
 
-                st.subheader("Test Dataset Evaluation")
-
                 st.metric(
-                    "Accuracy",
+                    "Test Accuracy",
                     f"{accuracy * 100:.2f}%"
                 )
 
-                st.write("Confusion Matrix")
 
-                cm = confusion_matrix(
-                    actual,
-                    predictions,
-                    labels=[0, 1]
-                )
-
-                cm_df = pd.DataFrame(
-                    cm,
-                    index=["Actual Normal", "Actual Attack"],
-                    columns=["Predicted Normal", "Predicted Attack"]
-                )
-
-                st.dataframe(cm_df)
-
-                report = classification_report(
-                    actual,
-                    predictions,
-                    target_names=["Normal", "Attack"],
-                    output_dict=True,
-                    zero_division=0
-                )
-
-                st.write("Classification Report")
-
-                st.dataframe(
-                    pd.DataFrame(report).transpose()
-                )
-
-# --------------------------------------------------
+# ==================================================
 # MODEL PERFORMANCE COMPARISON
-# --------------------------------------------------
+# ==================================================
 
 elif page == "Model Performance":
 
     st.header("Model Performance Comparison")
 
     st.write(
-        "Compare SVM, CNN and LSTM using different "
-        "performance and computational metrics."
+        "Compare the three trained models using "
+        "classification and computational metrics."
     )
 
     try:
 
         comparison = pd.read_csv("model_comparison.csv")
 
-        required_columns = [
-            "Model",
-            "Accuracy (%)",
-            "Precision (attack)",
-            "Recall (attack)",
-            "F1 Score (attack)",
-            "Training Time (s)",
-            "Prediction Time (s)"
-        ]
+        st.subheader("Complete Model Comparison")
 
-        missing_columns = [
-            col for col in required_columns
-            if col not in comparison.columns
-        ]
+        st.dataframe(
+            comparison.round(3),
+            use_container_width=True,
+            hide_index=True
+        )
 
-        if missing_columns:
-            st.error(
-                f"Missing columns in comparison CSV: {missing_columns}"
-            )
-            st.stop()
+        st.divider()
 
-        # Best model summaries
+        # BEST MODEL HIGHLIGHTS
+
         best_accuracy = comparison.loc[
             comparison["Accuracy (%)"].idxmax()
-        ]
-
-        best_precision = comparison.loc[
-            comparison["Precision (attack)"].idxmax()
-        ]
-
-        best_recall = comparison.loc[
-            comparison["Recall (attack)"].idxmax()
         ]
 
         best_f1 = comparison.loc[
             comparison["F1 Score (attack)"].idxmax()
         ]
 
-        fastest_training = comparison.loc[
-            comparison["Training Time (s)"].idxmin()
-        ]
-
-        fastest_prediction = comparison.loc[
+        fastest = comparison.loc[
             comparison["Prediction Time (s)"].idxmin()
         ]
-
-        st.subheader("Performance Highlights")
 
         c1, c2, c3 = st.columns(3)
 
@@ -511,95 +556,56 @@ elif page == "Model Performance":
         )
 
         c3.metric(
-            "Best Attack Recall",
-            best_recall["Model"],
-            f'{best_recall["Recall (attack)"]:.3f}'
-        )
-
-        c4, c5 = st.columns(2)
-
-        c4.metric(
-            "Fastest Training",
-            fastest_training["Model"],
-            f'{fastest_training["Training Time (s)"]:.2f} sec'
-        )
-
-        c5.metric(
             "Fastest Prediction",
-            fastest_prediction["Model"],
-            f'{fastest_prediction["Prediction Time (s)"]:.2f} sec'
+            fastest["Model"],
+            f'{fastest["Prediction Time (s)"]:.2f} sec'
         )
 
         st.divider()
 
-        # Full comparison table
-        st.subheader("Complete Comparison Table")
+        # ACCURACY
 
-        st.dataframe(
-            comparison.round(3),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.divider()
-
-        # Accuracy
         st.subheader("1. Accuracy Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["Accuracy (%)"]]
         )
 
-        # Precision
+        # PRECISION
+
         st.subheader("2. Attack Precision Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["Precision (attack)"]]
         )
 
-        # Recall
+        # RECALL
+
         st.subheader("3. Attack Recall Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["Recall (attack)"]]
         )
 
-        # F1 score
+        # F1 SCORE
+
         st.subheader("4. Attack F1-Score Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["F1 Score (attack)"]]
         )
 
-        st.divider()
+        # TRAINING TIME
 
-        # Classification metrics
-        st.subheader("5. Overall Classification Metrics")
-
-        classification_metrics = comparison.set_index(
-            "Model"
-        )[
-            [
-                "Accuracy (%)",
-                "Precision (attack)",
-                "Recall (attack)",
-                "F1 Score (attack)"
-            ]
-        ]
-
-        st.bar_chart(classification_metrics)
-
-        st.divider()
-
-        # Training time
-        st.subheader("6. Model Training Time")
+        st.subheader("5. Training Time Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["Training Time (s)"]]
         )
 
-        # Prediction time
-        st.subheader("7. Model Prediction Time")
+        # PREDICTION TIME
+
+        st.subheader("6. Prediction Time Comparison")
 
         st.bar_chart(
             comparison.set_index("Model")[["Prediction Time (s)"]]
@@ -607,40 +613,280 @@ elif page == "Model Performance":
 
         st.divider()
 
-        # Model interpretation
-        st.subheader("Model Analysis")
+        st.subheader("Overall Model Analysis")
 
         st.markdown("""
         **CNN**
-        - Achieved the highest test accuracy.
-        - Achieved the highest attack precision and F1-score.
+        - Highest test accuracy.
+        - Highest attack precision and F1-score.
 
         **SVM**
-        - Had the fastest prediction time.
-        - Provides a comparatively lightweight prediction process.
+        - Fastest prediction time.
 
         **LSTM**
-        - Required the longest training time.
-        - Had the lowest test accuracy among the three models.
+        - Longest training and prediction time.
+        - Lowest test accuracy.
 
-        **Overall Observation**
-
-        CNN performed best in terms of test accuracy and attack
-        F1-score, while SVM was the fastest during prediction.
+        **Conclusion:** CNN provided the best overall
+        classification performance in our experiments.
         """)
 
         st.caption(
-            "All metrics are based on the held-out UNSW-NB15 testing dataset."
+            "Results are from the held-out UNSW-NB15 testing dataset."
         )
 
     except Exception as e:
 
-        st.error("Unable to display model comparisons.")
+        st.error("Unable to load model comparison.")
         st.exception(e)
 
-# --------------------------------------------------
-# DETECTION HISTORY
-# --------------------------------------------------
+
+# ==================================================
+# ADVANCED EVALUATION PAGE
+# ==================================================
+
+elif page == "Advanced Evaluation":
+
+    st.header("Advanced Model Evaluation")
+
+    st.write("""
+    This section compares the models using confusion matrices,
+    ROC curves and precision-recall curves.
+    """)
+
+    actual = st.session_state.get("uploaded_labels")
+
+    if actual is None:
+
+        st.warning(
+            "First upload a labelled testing CSV and run "
+            "the 'Evaluate All Models' operation in the section below."
+        )
+
+    else:
+
+        actual = pd.to_numeric(actual, errors="coerce")
+
+        if not actual.notna().all() or not actual.isin([0, 1]).all():
+
+            st.error("The uploaded dataset does not contain valid binary labels.")
+
+        else:
+
+            actual = actual.astype(int)
+
+            if len(np.unique(actual)) < 2:
+
+                st.warning(
+                    "The evaluation dataset must contain both normal "
+                    "and attack records to calculate ROC and PR curves."
+                )
+
+            else:
+
+                st.info(
+                    "Advanced evaluation uses the predictions and scores "
+                    "generated for the currently uploaded labelled dataset."
+                )
+
+                if "all_model_results" not in st.session_state:
+
+                    st.warning(
+                        "Click 'Evaluate All Models' in the Intrusion "
+                        "Detection section to generate these comparisons."
+                    )
+
+                else:
+
+                    all_results = st.session_state["all_model_results"]
+
+                    # CONFUSION MATRICES
+
+                    st.subheader("1. Confusion Matrix Heatmaps")
+
+                    for name in ["SVM", "CNN", "LSTM"]:
+
+                        pred = all_results[name]["predictions"]
+
+                        cm = confusion_matrix(
+                            actual,
+                            pred,
+                            labels=[0, 1]
+                        )
+
+                        fig, ax = plt.subplots(figsize=(5, 4))
+
+                        image = ax.imshow(
+                            cm,
+                            interpolation="nearest",
+                            cmap="Greys"
+                        )
+
+                        ax.set_title(name + " Confusion Matrix")
+
+                        ax.set_xlabel("Predicted Label")
+                        ax.set_ylabel("Actual Label")
+
+                        ax.set_xticks([0, 1])
+                        ax.set_yticks([0, 1])
+
+                        ax.set_xticklabels(["Normal", "Attack"])
+                        ax.set_yticklabels(["Normal", "Attack"])
+
+                        for i in range(2):
+                            for j in range(2):
+
+                                ax.text(
+                                    j, i, str(cm[i, j]),
+                                    ha="center",
+                                    va="center",
+                                    color="red" if cm[i, j] > cm.max() / 2 else "black"
+                                )
+
+                        fig.colorbar(image, ax=ax)
+
+                        st.pyplot(fig)
+                        plt.close(fig)
+
+                    st.divider()
+
+                    # ROC CURVE
+
+                    st.subheader("2. ROC Curve Comparison")
+
+                    fig, ax = plt.subplots(figsize=(8, 5))
+
+                    for name in ["SVM", "CNN", "LSTM"]:
+
+                        scores = all_results[name]["scores"]
+
+                        fpr, tpr, thresholds = roc_curve(
+                            actual,
+                            scores
+                        )
+
+                        auc = roc_auc_score(
+                            actual,
+                            scores
+                        )
+
+                        ax.plot(
+                            fpr,
+                            tpr,
+                            label=f"{name} (AUC = {auc:.3f})"
+                        )
+
+                    ax.plot(
+                        [0, 1],
+                        [0, 1],
+                        linestyle="--",
+                        label="Random Classifier"
+                    )
+
+                    ax.set_xlabel("False Positive Rate")
+                    ax.set_ylabel("True Positive Rate")
+
+                    ax.set_title("ROC Curve Comparison")
+
+                    ax.legend()
+                    ax.grid(alpha=0.3)
+
+                    st.pyplot(fig)
+                    plt.close(fig)
+
+                    st.divider()
+
+                    # PRECISION RECALL CURVE
+
+                    st.subheader("3. Precision-Recall Curve Comparison")
+
+                    fig, ax = plt.subplots(figsize=(8, 5))
+
+                    for name in ["SVM", "CNN", "LSTM"]:
+
+                        scores = all_results[name]["scores"]
+
+                        precision, recall, thresholds = precision_recall_curve(
+                            actual,
+                            scores
+                        )
+
+                        ap = average_precision_score(
+                            actual,
+                            scores
+                        )
+
+                        ax.plot(
+                            recall,
+                            precision,
+                            label=f"{name} (AP = {ap:.3f})"
+                        )
+
+                    ax.set_xlabel("Recall")
+                    ax.set_ylabel("Precision")
+
+                    ax.set_title("Precision-Recall Curve Comparison")
+
+                    ax.legend()
+                    ax.grid(alpha=0.3)
+
+                    st.pyplot(fig)
+                    plt.close(fig)
+
+                    st.divider()
+
+                    # ADVANCED METRICS TABLE
+
+                    st.subheader("4. Advanced Metrics Comparison")
+
+                    metric_rows = []
+
+                    for name in ["SVM", "CNN", "LSTM"]:
+
+                        pred = all_results[name]["predictions"]
+                        scores = all_results[name]["scores"]
+
+                        metrics = calculate_metrics(
+                            actual,
+                            pred,
+                            scores
+                        )
+
+                        metrics["Model"] = name
+
+                        metric_rows.append(metrics)
+
+                    metrics_df = pd.DataFrame(metric_rows)
+
+                    metrics_df = metrics_df[
+                        [
+                            "Model",
+                            "Accuracy (%)",
+                            "Precision (attack)",
+                            "Recall (attack)",
+                            "F1 Score (attack)",
+                            "ROC AUC",
+                            "PR AUC"
+                        ]
+                    ]
+
+                    st.dataframe(
+                        metrics_df.round(4),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.download_button(
+                        "Download Advanced Evaluation Report",
+                        metrics_df.to_csv(index=False),
+                        "advanced_evaluation_report.csv",
+                        "text/csv"
+                    )
+
+
+# ==================================================
+# DETECTION RESULTS PAGE
+# ==================================================
 
 elif page == "Detection Results":
 
@@ -653,24 +899,31 @@ elif page == "Detection Results":
             use_container_width=True
         )
 
+        st.download_button(
+            "Download Results CSV",
+            st.session_state["results"].to_csv(index=False),
+            "detection_results.csv",
+            "text/csv"
+        )
+
     else:
 
         st.info(
-            "No detection results are available yet. "
-            "Run an intrusion detection first."
+            "No results available. Run intrusion detection first."
         )
 
-# --------------------------------------------------
-# ABOUT PROJECT
-# --------------------------------------------------
+
+# ==================================================
+# ABOUT PROJECT PAGE
+# ==================================================
 
 elif page == "About Project":
 
     st.header("About the Project")
 
     st.write("""
-    AI-Based Network Intrusion Detection Using Machine Learning
-    and Deep Learning.
+    AI-Based Network Intrusion Detection Using
+    Machine Learning and Deep Learning.
 
     **Dataset:** UNSW-NB15
 
@@ -682,32 +935,45 @@ elif page == "About Project":
 
     **Objective:**
 
-    To classify network traffic as normal or malicious and
-    compare the performance of three machine learning models.
+    To classify network traffic as normal or malicious
+    and compare the performance of three trained models.
 
-    **Technology Used:**
+    **Technologies:**
 
     - Python
-    - Pandas and NumPy
+    - Pandas
+    - NumPy
     - Scikit-learn
-    - TensorFlow and Keras
+    - TensorFlow
     - Streamlit
+    - Matplotlib
 
-    This is a prototype that analyzes uploaded CSV records.
-    It does not monitor live network traffic or automatically
-    block attacks.
+    This prototype analyzes uploaded CSV records.
+    It does not monitor live network traffic or
+    automatically block attacks.
     """)
 
     st.divider()
 
-    st.subheader("Project Dataset")
+    st.subheader("Dataset Information")
 
-    st.write("UNSW-NB15 Network Intrusion Detection Dataset")
+    st.write("""
+    UNSW-NB15 is a network intrusion detection dataset
+    containing normal and malicious network traffic.
 
-    st.write(
-        "The system performs binary classification: "
-        "0 = Normal Traffic, 1 = Attack Traffic."
-    )
+    The system performs binary classification:
+
+    - 0 = Normal Traffic
+    - 1 = Attack Traffic
+    """)
+
+
+# ==================================================
+# SIDEBAR FOOTER
+# ==================================================
 
 st.sidebar.divider()
-st.sidebar.caption("AI Network Intrusion Detection | M.Tech Project")
+
+st.sidebar.caption(
+    "AI Network Intrusion Detection | M.Tech Project"
+)
