@@ -6,271 +6,450 @@ import joblib
 import time
 
 from tensorflow.keras.models import load_model
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix
+)
 
-# Page configuration
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
+
 st.set_page_config(
-    page_title="Network Intrusion Detection",
+    page_title="AI Network Intrusion Detection",
     page_icon="🛡️",
     layout="wide"
 )
 
-# Minimal black and white styling
+# --------------------------------------------------
+# CUSTOM DESIGN
+# --------------------------------------------------
+
 st.markdown("""
 <style>
 .stApp {
     background-color: #000000;
-    color: #FFFFFF;
+    color: white;
 }
 [data-testid="stSidebar"] {
     background-color: #111111;
 }
 h1, h2, h3, p, label {
-    color: #FFFFFF !important;
+    color: white !important;
 }
 .stButton > button {
-    background-color: #FFFFFF;
-    color: #000000;
+    background-color: white;
+    color: black;
     border-radius: 6px;
-    border: none;
     font-weight: bold;
 }
 .stButton > button:hover {
     background-color: #cccccc;
-    color: #000000;
+    color: black;
+}
+[data-testid="stMetric"] {
+    background-color: #151515;
+    padding: 15px;
+    border-radius: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Load trained models
+# --------------------------------------------------
+# LOAD TRAINED MODELS
+# --------------------------------------------------
+
 @st.cache_resource
 def load_models():
+
     svm = joblib.load("svm_model.joblib")
     cnn = load_model("cnn_model.keras")
     lstm = load_model("lstm_model.keras")
+
     scaler = joblib.load("scaler.joblib")
     prep = joblib.load("preprocessing_info.joblib")
+
     return svm, cnn, lstm, scaler, prep
+
 
 st.title("AI-Based Network Intrusion Detection")
 st.caption("Machine Learning and Deep Learning | UNSW-NB15 Dataset")
 
 try:
     svm, cnn, lstm, scaler, prep = load_models()
-    st.success("All models loaded successfully")
+    st.success("All three models loaded successfully!")
+
 except Exception as e:
-    st.error(f"Unable to load models: {e}")
+    st.error("Unable to load the trained models.")
+    st.exception(e)
     st.stop()
 
-# Sidebar
-st.sidebar.title("Navigation")
+# --------------------------------------------------
+# SIDEBAR NAVIGATION
+# --------------------------------------------------
+
+st.sidebar.title("NAVIGATION")
+
 page = st.sidebar.radio(
-    "Select Page",
-    ["Overview", "Intrusion Detection", "Model Performance", "About Project"]
+    "Select a section",
+    [
+        "Overview",
+        "Intrusion Detection",
+        "Model Performance",
+        "Detection Results",
+        "About Project"
+    ]
 )
 
+# --------------------------------------------------
+# OVERVIEW
+# --------------------------------------------------
+
 if page == "Overview":
+
     st.header("Dashboard Overview")
-    st.write("An AI-based system for identifying normal and malicious network traffic.")
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Available Models", "3")
-    col2.metric("Dataset", "UNSW-NB15")
-    col3.metric("Detection Type", "Binary Classification")
+    st.write("""
+    This system uses machine learning and deep learning
+    models to identify normal and malicious network traffic.
+    """)
 
-    st.info("Upload a network traffic CSV file in the Intrusion Detection section to begin.")
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Available Models", "3")
+    c2.metric("Dataset", "UNSW-NB15")
+    c3.metric("Detection Type", "Binary Classification")
+
+    st.divider()
+
+    st.subheader("Available Detection Models")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.markdown("### SVM")
+    c1.write("Support Vector Machine")
+
+    c2.markdown("### CNN")
+    c2.write("Convolutional Neural Network")
+
+    c3.markdown("### LSTM")
+    c3.write("Long Short-Term Memory")
+
+    st.info(
+        "Navigate to Intrusion Detection to upload a CSV "
+        "file and classify network traffic."
+    )
+
+# --------------------------------------------------
+# INTRUSION DETECTION
+# --------------------------------------------------
 
 elif page == "Intrusion Detection":
-    st.header("Network Traffic Analysis")
+
+    st.header("Network Intrusion Detection")
 
     model_name = st.selectbox(
-        "Select Detection Model",
+        "Choose a detection model",
         ["SVM", "CNN", "LSTM"]
     )
 
     uploaded_file = st.file_uploader(
-        "Upload network traffic CSV",
+        "Upload your network traffic CSV file",
         type=["csv"]
     )
 
     if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
 
-        st.subheader("Dataset Preview")
-        st.dataframe(df.head())
+        try:
+            df = pd.read_csv(uploaded_file)
 
-        if st.button("Run Intrusion Detection"):
-            with st.spinner("Analyzing network traffic..."):
+            st.subheader("Uploaded Dataset Preview")
 
-                # Keep ground-truth labels separate from prediction features
-                actual_labels = (
-                    df["label"].copy()
-                    if "label" in df.columns else None
-                )
+            st.write("Dataset shape:", df.shape)
 
-                X = df.drop(
-                    columns=["label", "attack_cat", "id"],
-                    errors="ignore"
-                ).copy()
-
-                expected_raw = prep["num_cols"] + prep["cat_cols"]
-
-                missing = [c for c in expected_raw if c not in X.columns]
-                extra = [c for c in X.columns if c not in expected_raw]
-
-                if missing or extra:
-                    st.error(
-                        f"CSV columns do not match the training data. "
-                        f"Missing: {missing}. Extra: {extra}."
-                    )
-                    st.stop()
-
-                X = X[expected_raw]
-
-                num_cols = prep["num_cols"]
-                cat_cols = prep["cat_cols"]
-
-                X = X.replace([np.inf, -np.inf], np.nan)
-                X[num_cols] = X[num_cols].fillna(prep["medians"])
-                X[cat_cols] = X[cat_cols].fillna("missing")
-
-                X = pd.get_dummies(X)
-                X = X.reindex(
-                    columns=prep["feature_columns"],
-                    fill_value=0
-                )
-
-                X_scaled = scaler.transform(X)
-
-                start = time.time()
-
-                if model_name == "SVM":
-                    predictions = svm.predict(X_scaled)
-
-                elif model_name == "CNN":
-                    data = X_scaled.astype("float32").reshape(
-                        -1, 194, 1
-                    )
-                    predictions = (
-                        cnn.predict(data, verbose=0).ravel() >= 0.5
-                    ).astype(int)
-
-                else:
-                    data = X_scaled.astype("float32").reshape(
-                        -1, 194, 1
-                    )
-                    predictions = (
-                        lstm.predict(data, verbose=0).ravel() >= 0.5
-                    ).astype(int)
-
-                elapsed = time.time() - start
-
-            results = df.copy()
-            results["Predicted Label"] = predictions
-            results["Prediction"] = np.where(
-                predictions == 1, "Attack", "Normal"
+            st.dataframe(
+                df.head(),
+                use_container_width=True
             )
 
-            st.session_state["results"] = results
-            st.session_state["predictions"] = predictions
-            st.session_state["actual_labels"] = actual_labels
-            st.session_state["elapsed"] = elapsed
-            st.session_state["model_name"] = model_name
+            if st.button("Run Intrusion Detection"):
 
-            st.success("Detection completed!")
+                with st.spinner("Analyzing network traffic..."):
+
+                    # Save actual labels separately for evaluation
+                    actual_labels = (
+                        df["label"].copy()
+                        if "label" in df.columns
+                        else None
+                    )
+
+                    # Remove target and identifier columns
+                    X = df.drop(
+                        columns=["label", "attack_cat", "id"],
+                        errors="ignore"
+                    ).copy()
+
+                    # Expected original input columns
+                    num_cols = list(prep["num_cols"])
+                    cat_cols = list(prep["cat_cols"])
+
+                    expected_raw = num_cols + cat_cols
+
+                    missing = [
+                        col for col in expected_raw
+                        if col not in X.columns
+                    ]
+
+                    extra = [
+                        col for col in X.columns
+                        if col not in expected_raw
+                    ]
+
+                    if missing or extra:
+
+                        st.error(
+                            "Uploaded CSV columns do not match "
+                            "the training dataset."
+                        )
+
+                        if missing:
+                            st.write("Missing columns:", missing)
+
+                        if extra:
+                            st.write("Unexpected columns:", extra)
+
+                        st.stop()
+
+                    # Match training input schema
+                    X = X[expected_raw]
+
+                    # Handle missing and infinite values
+                    X = X.replace(
+                        [np.inf, -np.inf],
+                        np.nan
+                    )
+
+                    X[num_cols] = X[num_cols].fillna(
+                        prep["medians"]
+                    )
+
+                    X[cat_cols] = X[cat_cols].fillna("missing")
+
+                    # One-hot encoding
+                    X = pd.get_dummies(X)
+
+                    # Match original training features
+                    X = X.reindex(
+                        columns=prep["feature_columns"],
+                        fill_value=0
+                    )
+
+                    # Apply the previously trained scaler
+                    X_scaled = scaler.transform(X)
+
+                    # Prediction
+                    start_time = time.time()
+
+                    if model_name == "SVM":
+
+                        predictions = svm.predict(X_scaled)
+
+                    elif model_name == "CNN":
+
+                        cnn_input = X_scaled.astype(
+                            "float32"
+                        ).reshape(
+                            -1, X_scaled.shape[1], 1
+                        )
+
+                        probabilities = cnn.predict(
+                            cnn_input,
+                            verbose=0
+                        ).ravel()
+
+                        predictions = (
+                            probabilities >= 0.5
+                        ).astype(int)
+
+                    else:
+
+                        lstm_input = X_scaled.astype(
+                            "float32"
+                        ).reshape(
+                            -1, X_scaled.shape[1], 1
+                        )
+
+                        probabilities = lstm.predict(
+                            lstm_input,
+                            verbose=0
+                        ).ravel()
+
+                        predictions = (
+                            probabilities >= 0.5
+                        ).astype(int)
+
+                    prediction_time = (
+                        time.time() - start_time
+                    )
+
+                # Create result dataframe
+                results = df.copy()
+
+                results["Predicted Label"] = predictions
+
+                results["Prediction"] = np.where(
+                    predictions == 1,
+                    "Attack",
+                    "Normal"
+                )
+
+                # Store results
+                st.session_state["results"] = results
+                st.session_state["predictions"] = predictions
+                st.session_state["actual_labels"] = actual_labels
+                st.session_state["prediction_time"] = prediction_time
+                st.session_state["selected_model"] = model_name
+
+                st.success("Intrusion detection completed!")
+
+        except Exception as e:
+
+            st.error("An error occurred during detection.")
+            st.exception(e)
+
+# --------------------------------------------------
+# DETECTION RESULTS
+# --------------------------------------------------
 
     if "results" in st.session_state:
+
         results = st.session_state["results"]
         predictions = st.session_state["predictions"]
 
-        st.subheader("Detection Results")
+        st.divider()
+        st.subheader("Detection Summary")
 
         total = len(predictions)
         attacks = int(np.sum(predictions == 1))
         normal = int(np.sum(predictions == 0))
 
         c1, c2, c3 = st.columns(3)
+
         c1.metric("Total Records", total)
         c2.metric("Attack Records", attacks)
         c3.metric("Normal Records", normal)
 
-        st.write("### Prediction Distribution")
-        st.bar_chart(
-            pd.DataFrame({
-                "Records": [normal, attacks]
-            }, index=["Normal", "Attack"])
+        st.subheader("Traffic Distribution")
+
+        distribution = pd.DataFrame(
+            {
+                "Number of Records": [normal, attacks]
+            },
+            index=["Normal Traffic", "Attack Traffic"]
         )
 
-        st.write("### Prediction Details")
-        st.dataframe(results, use_container_width=True)
+        st.bar_chart(distribution)
+
+        st.subheader("Prediction Details")
+
+        st.dataframe(
+            results,
+            use_container_width=True
+        )
 
         st.download_button(
-            "Download Prediction Results",
-            results.to_csv(index=False),
-            "intrusion_detection_results.csv",
-            "text/csv"
+            "Download Detection Results",
+            data=results.to_csv(index=False),
+            file_name="intrusion_detection_results.csv",
+            mime="text/csv"
         )
 
+        st.write(
+            "Selected Model:",
+            st.session_state["selected_model"]
+        )
+
+        st.write(
+            "Prediction Time:",
+            f'{st.session_state["prediction_time"]:.2f} seconds'
+        )
+
+        # Evaluate only when valid ground-truth labels exist
         actual = st.session_state["actual_labels"]
+
         if actual is not None:
-            st.write("### Test Dataset Evaluation")
-            actual = pd.to_numeric(actual, errors="coerce")
-            valid = actual.notna()
 
-            if valid.all() and actual.isin([0, 1]).all():
-                from sklearn.metrics import accuracy_score
-                accuracy = accuracy_score(actual.astype(int), predictions)
-                st.metric("Test Accuracy", f"{accuracy * 100:.2f}%")
-            else:
-                st.warning("Ground-truth labels are not valid binary labels.")
+            actual = pd.to_numeric(
+                actual,
+                errors="coerce"
+            )
 
-        st.caption(
-            f"Model: {st.session_state['model_name']} | "
-            f"Prediction time: {st.session_state['elapsed']:.2f} seconds"
-        )
+            if actual.notna().all() and actual.isin([0, 1]).all():
 
+                actual = actual.astype(int)
+
+                accuracy = accuracy_score(
+                    actual,
+                    predictions
+                )
+
+                st.subheader("Test Dataset Evaluation")
+
+                st.metric(
+                    "Accuracy",
+                    f"{accuracy * 100:.2f}%"
+                )
+
+                st.write("Confusion Matrix")
+
+                cm = confusion_matrix(
+                    actual,
+                    predictions,
+                    labels=[0, 1]
+                )
+
+                cm_df = pd.DataFrame(
+                    cm,
+                    index=["Actual Normal", "Actual Attack"],
+                    columns=["Predicted Normal", "Predicted Attack"]
+                )
+
+                st.dataframe(cm_df)
+
+                report = classification_report(
+                    actual,
+                    predictions,
+                    target_names=["Normal", "Attack"],
+                    output_dict=True,
+                    zero_division=0
+                )
+
+                st.write("Classification Report")
+
+                st.dataframe(
+                    pd.DataFrame(report).transpose()
+                )
+
+# --------------------------------------------------
+# MODEL PERFORMANCE COMPARISON
+# --------------------------------------------------
 
 elif page == "Model Performance":
+
     st.header("Model Performance Comparison")
-    st.write("Compare SVM, CNN and LSTM using multiple evaluation metrics.")
 
-    comparison = pd.read_csv("model_comparison.csv")
-
-    # Performance summary
-    best_accuracy = comparison.loc[comparison["Accuracy (%)"].idxmax()]
-    best_f1 = comparison.loc[comparison["F1 Score (attack)"].idxmax()]
-    fastest_training = comparison.loc[comparison["Training Time (s)"].idxmin()]
-    fastest_prediction = comparison.loc[comparison["Prediction Time (s)"].idxmin()]
-
-    c1, c2 = st.columns(2)
-    c1.metric("Best Accuracy", best_accuracy["Model"],
-              f'{best_accuracy["Accuracy (%)"]:.2f}%')
-    c2.metric("Best Attack F1 Score", best_f1["Model"],
-              f'{best_f1["F1 Score (attack)"]:.3f}')
-
-    c3, c4 = st.columns(2)
-    c3.metric("Fastest Training", fastest_training["Model"],
-              f'{fastest_training["Training Time (s)"]:.2f} sec')
-    c4.metric("Fastest Prediction", fastest_prediction["Model"],
-              f'{fastest_prediction["Prediction Time (s)"]:.2f} sec')
-
-    st.divider()
-
-    # Complete comparison table
-    st.subheader("Complete Model Comparison")
-    st.dataframe(
-        comparison.round(3),
-        use_container_width=True,
-        hide_index=True
+    st.write(
+        "Compare SVM, CNN and LSTM using different "
+        "performance and computational metrics."
     )
 
-    st.divider()
+    try:
 
-    # Select metric for visual comparison
-    st.subheader("Performance Metric Analysis")
+        comparison = pd.read_csv("model_comparison.csv")
 
-    metric = st.selectbox(
-        "Select a metric to compare",
-        [
+        required_columns = [
+            "Model",
             "Accuracy (%)",
             "Precision (attack)",
             "Recall (attack)",
@@ -278,74 +457,257 @@ elif page == "Model Performance":
             "Training Time (s)",
             "Prediction Time (s)"
         ]
-    )
 
-    chart_data = comparison.set_index("Model")[[metric]]
-
-    st.bar_chart(chart_data)
-
-    st.divider()
-
-    # Compare all classification metrics
-    st.subheader("Classification Performance")
-
-    classification_metrics = comparison.set_index("Model")[
-        [
-            "Accuracy (%)",
-            "Precision (attack)",
-            "Recall (attack)",
-            "F1 Score (attack)"
+        missing_columns = [
+            col for col in required_columns
+            if col not in comparison.columns
         ]
-    ]
 
-    st.bar_chart(classification_metrics)
+        if missing_columns:
+            st.error(
+                f"Missing columns in comparison CSV: {missing_columns}"
+            )
+            st.stop()
 
-    st.divider()
+        # Best model summaries
+        best_accuracy = comparison.loc[
+            comparison["Accuracy (%)"].idxmax()
+        ]
 
-    # Compare execution times
-    st.subheader("Computational Efficiency")
+        best_precision = comparison.loc[
+            comparison["Precision (attack)"].idxmax()
+        ]
 
-    time_metrics = comparison.set_index("Model")[
-        ["Training Time (s)", "Prediction Time (s)"]
-    ]
+        best_recall = comparison.loc[
+            comparison["Recall (attack)"].idxmax()
+        ]
 
-    st.bar_chart(time_metrics)
+        best_f1 = comparison.loc[
+            comparison["F1 Score (attack)"].idxmax()
+        ]
 
-    st.divider()
+        fastest_training = comparison.loc[
+            comparison["Training Time (s)"].idxmin()
+        ]
 
-    # Interpretation
-    st.subheader("Model Analysis")
+        fastest_prediction = comparison.loc[
+            comparison["Prediction Time (s)"].idxmin()
+        ]
 
-    st.write("""
-    - **CNN:** Achieved the highest test accuracy and attack F1-score.
-    - **SVM:** Had the fastest prediction time.
-    - **LSTM:** Required the longest training and prediction time.
-    - All three models achieved high attack recall, but their ability
-      to correctly identify normal traffic differed.
-    """)
+        st.subheader("Performance Highlights")
 
-    st.caption(
-        "All results are based on the held-out UNSW-NB15 testing dataset."
-    )
+        c1, c2, c3 = st.columns(3)
 
+        c1.metric(
+            "Best Accuracy",
+            best_accuracy["Model"],
+            f'{best_accuracy["Accuracy (%)"]:.2f}%'
+        )
+
+        c2.metric(
+            "Best Attack F1",
+            best_f1["Model"],
+            f'{best_f1["F1 Score (attack)"]:.3f}'
+        )
+
+        c3.metric(
+            "Best Attack Recall",
+            best_recall["Model"],
+            f'{best_recall["Recall (attack)"]:.3f}'
+        )
+
+        c4, c5 = st.columns(2)
+
+        c4.metric(
+            "Fastest Training",
+            fastest_training["Model"],
+            f'{fastest_training["Training Time (s)"]:.2f} sec'
+        )
+
+        c5.metric(
+            "Fastest Prediction",
+            fastest_prediction["Model"],
+            f'{fastest_prediction["Prediction Time (s)"]:.2f} sec'
+        )
+
+        st.divider()
+
+        # Full comparison table
+        st.subheader("Complete Comparison Table")
+
+        st.dataframe(
+            comparison.round(3),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.divider()
+
+        # Accuracy
+        st.subheader("1. Accuracy Comparison")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["Accuracy (%)"]]
+        )
+
+        # Precision
+        st.subheader("2. Attack Precision Comparison")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["Precision (attack)"]]
+        )
+
+        # Recall
+        st.subheader("3. Attack Recall Comparison")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["Recall (attack)"]]
+        )
+
+        # F1 score
+        st.subheader("4. Attack F1-Score Comparison")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["F1 Score (attack)"]]
+        )
+
+        st.divider()
+
+        # Classification metrics
+        st.subheader("5. Overall Classification Metrics")
+
+        classification_metrics = comparison.set_index(
+            "Model"
+        )[
+            [
+                "Accuracy (%)",
+                "Precision (attack)",
+                "Recall (attack)",
+                "F1 Score (attack)"
+            ]
+        ]
+
+        st.bar_chart(classification_metrics)
+
+        st.divider()
+
+        # Training time
+        st.subheader("6. Model Training Time")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["Training Time (s)"]]
+        )
+
+        # Prediction time
+        st.subheader("7. Model Prediction Time")
+
+        st.bar_chart(
+            comparison.set_index("Model")[["Prediction Time (s)"]]
+        )
+
+        st.divider()
+
+        # Model interpretation
+        st.subheader("Model Analysis")
+
+        st.markdown("""
+        **CNN**
+        - Achieved the highest test accuracy.
+        - Achieved the highest attack precision and F1-score.
+
+        **SVM**
+        - Had the fastest prediction time.
+        - Provides a comparatively lightweight prediction process.
+
+        **LSTM**
+        - Required the longest training time.
+        - Had the lowest test accuracy among the three models.
+
+        **Overall Observation**
+
+        CNN performed best in terms of test accuracy and attack
+        F1-score, while SVM was the fastest during prediction.
+        """)
+
+        st.caption(
+            "All metrics are based on the held-out UNSW-NB15 testing dataset."
+        )
+
+    except Exception as e:
+
+        st.error("Unable to display model comparisons.")
+        st.exception(e)
+
+# --------------------------------------------------
+# DETECTION HISTORY
+# --------------------------------------------------
+
+elif page == "Detection Results":
+
+    st.header("Detection Results")
+
+    if "results" in st.session_state:
+
+        st.dataframe(
+            st.session_state["results"],
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "No detection results are available yet. "
+            "Run an intrusion detection first."
+        )
+
+# --------------------------------------------------
+# ABOUT PROJECT
+# --------------------------------------------------
 
 elif page == "About Project":
+
     st.header("About the Project")
 
     st.write("""
-    This project uses machine learning and deep learning
-    techniques to classify network traffic as normal or malicious.
+    AI-Based Network Intrusion Detection Using Machine Learning
+    and Deep Learning.
 
     **Dataset:** UNSW-NB15
 
-    **Models:**
-    - Support Vector Machine (SVM)
-    - Convolutional Neural Network (CNN)
-    - Long Short-Term Memory (LSTM)
+    **Models Used:**
 
-    **Objective:** Compare the performance of three models
-    for binary network intrusion detection.
+    1. Support Vector Machine (SVM)
+    2. Convolutional Neural Network (CNN)
+    3. Long Short-Term Memory (LSTM)
 
-    This prototype analyzes uploaded CSV records. It does not
-    monitor live network traffic or automatically block attacks.
+    **Objective:**
+
+    To classify network traffic as normal or malicious and
+    compare the performance of three machine learning models.
+
+    **Technology Used:**
+
+    - Python
+    - Pandas and NumPy
+    - Scikit-learn
+    - TensorFlow and Keras
+    - Streamlit
+
+    This is a prototype that analyzes uploaded CSV records.
+    It does not monitor live network traffic or automatically
+    block attacks.
     """)
+
+    st.divider()
+
+    st.subheader("Project Dataset")
+
+    st.write("UNSW-NB15 Network Intrusion Detection Dataset")
+
+    st.write(
+        "The system performs binary classification: "
+        "0 = Normal Traffic, 1 = Attack Traffic."
+    )
+
+st.sidebar.divider()
+st.sidebar.caption("AI Network Intrusion Detection | M.Tech Project")
