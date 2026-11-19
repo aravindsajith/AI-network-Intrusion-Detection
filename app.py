@@ -29,7 +29,7 @@ SURFACE = "#323C4B"
 BORDER = "#2C7EF4"
 GRID = "#867F71"
 TEXT = "#F2F2F4"
-MUTED = "#85858F"
+MUTED = "#9699BF"
 SOFT = "#B4B4BC"
 
 # Pastel palette
