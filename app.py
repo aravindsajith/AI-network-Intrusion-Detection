@@ -228,21 +228,106 @@ elif page == "Intrusion Detection":
             f"Prediction time: {st.session_state['elapsed']:.2f} seconds"
         )
 
+
 elif page == "Model Performance":
     st.header("Model Performance Comparison")
+    st.write("Compare SVM, CNN and LSTM using multiple evaluation metrics.")
 
-    try:
-        comparison = pd.read_csv("model_comparison.csv")
-        st.dataframe(comparison, use_container_width=True)
+    comparison = pd.read_csv("model_comparison.csv")
 
-        if "Model" in comparison.columns and "Accuracy (%)" in comparison.columns:
-            st.subheader("Accuracy Comparison")
-            st.bar_chart(
-                comparison.set_index("Model")[["Accuracy (%)"]]
-            )
+    # Performance summary
+    best_accuracy = comparison.loc[comparison["Accuracy (%)"].idxmax()]
+    best_f1 = comparison.loc[comparison["F1 Score (attack)"].idxmax()]
+    fastest_training = comparison.loc[comparison["Training Time (s)"].idxmin()]
+    fastest_prediction = comparison.loc[comparison["Prediction Time (s)"].idxmin()]
 
-    except Exception as e:
-        st.error(f"Could not load comparison data: {e}")
+    c1, c2 = st.columns(2)
+    c1.metric("Best Accuracy", best_accuracy["Model"],
+              f'{best_accuracy["Accuracy (%)"]:.2f}%')
+    c2.metric("Best Attack F1 Score", best_f1["Model"],
+              f'{best_f1["F1 Score (attack)"]:.3f}')
+
+    c3, c4 = st.columns(2)
+    c3.metric("Fastest Training", fastest_training["Model"],
+              f'{fastest_training["Training Time (s)"]:.2f} sec')
+    c4.metric("Fastest Prediction", fastest_prediction["Model"],
+              f'{fastest_prediction["Prediction Time (s)"]:.2f} sec')
+
+    st.divider()
+
+    # Complete comparison table
+    st.subheader("Complete Model Comparison")
+    st.dataframe(
+        comparison.round(3),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
+    # Select metric for visual comparison
+    st.subheader("Performance Metric Analysis")
+
+    metric = st.selectbox(
+        "Select a metric to compare",
+        [
+            "Accuracy (%)",
+            "Precision (attack)",
+            "Recall (attack)",
+            "F1 Score (attack)",
+            "Training Time (s)",
+            "Prediction Time (s)"
+        ]
+    )
+
+    chart_data = comparison.set_index("Model")[[metric]]
+
+    st.bar_chart(chart_data)
+
+    st.divider()
+
+    # Compare all classification metrics
+    st.subheader("Classification Performance")
+
+    classification_metrics = comparison.set_index("Model")[
+        [
+            "Accuracy (%)",
+            "Precision (attack)",
+            "Recall (attack)",
+            "F1 Score (attack)"
+        ]
+    ]
+
+    st.bar_chart(classification_metrics)
+
+    st.divider()
+
+    # Compare execution times
+    st.subheader("Computational Efficiency")
+
+    time_metrics = comparison.set_index("Model")[
+        ["Training Time (s)", "Prediction Time (s)"]
+    ]
+
+    st.bar_chart(time_metrics)
+
+    st.divider()
+
+    # Interpretation
+    st.subheader("Model Analysis")
+
+    st.write("""
+    - **CNN:** Achieved the highest test accuracy and attack F1-score.
+    - **SVM:** Had the fastest prediction time.
+    - **LSTM:** Required the longest training and prediction time.
+    - All three models achieved high attack recall, but their ability
+      to correctly identify normal traffic differed.
+    """)
+
+    st.caption(
+        "All results are based on the held-out UNSW-NB15 testing dataset."
+    )
+
 
 elif page == "About Project":
     st.header("About the Project")
