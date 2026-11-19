@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 
 from tensorflow.keras.models import load_model
 from sklearn.metrics import (
@@ -13,265 +14,207 @@ from sklearn.metrics import (
 )
 
 # =========================================================
-# 1. PAGE CONFIG + THEME
+# 1. PAGE CONFIG + DESIGN SYSTEM
+# One neutral palette, one accent. Nothing else.
 # =========================================================
 st.set_page_config(
-    page_title="NetGuard | AI Intrusion Detection",
-    page_icon="🛡️",
+    page_title="NetGuard",
+    page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-BG = "#0B0F16"
-PANEL = "#121A26"
-PANEL_ALT = "#172233"
-BORDER = "#263449"
-TEXT = "#F2F5F9"
-MUTED = "#9AA9BC"
-ACCENT = "#8DB7D8"
-TEAL = "#65C7B5"
-RED = "#E58B91"
-GOLD = "#D8B879"
+BG = "#0B0B0C"
+SURFACE = "#121214"
+BORDER = "#222226"
+GRID = "#1A1A1D"
+TEXT = "#EDEDED"
+MUTED = "#85858F"
+SOFT = "#B4B4BC"
+ACCENT = "#D4C5A0"      # champagne
+ATTACK = "#C97B76"      # muted red, used only for "attack"
+NORMAL = "#6F6F78"      # neutral grey, used for "normal"
 
 st.markdown(f"""
 <style>
-:root {{
-    color-scheme: dark;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root {{ color-scheme: dark; }}
+
+.stApp {{ background: {BG}; color: {TEXT}; }}
+.stApp, .stMarkdown, p, label, li, button, input, textarea, h1, h2, h3, h4 {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }}
-.stApp {{
-    background: {BG};
-    color: {TEXT};
-}}
+
+/* Remove Streamlit chrome */
+#MainMenu, footer, [data-testid="stDeployButton"], [data-testid="stToolbar"] {{ display: none !important; }}
+header[data-testid="stHeader"] {{ background: transparent; }}
+
 .block-container {{
-    max-width: 1500px;
-    padding-top: 1.6rem;
-    padding-bottom: 2.5rem;
+    max-width: 1180px;
+    padding-top: 3rem;
+    padding-bottom: 4rem;
 }}
+
+/* Typography */
+h1, h2, h3, h4 {{ color: {TEXT} !important; letter-spacing: -0.02em; font-weight: 500 !important; }}
+h3 {{ font-size: 1.02rem !important; margin-top: 0.5rem; }}
+p, li {{ color: {SOFT}; font-size: 0.93rem; line-height: 1.65; }}
+.stCaption, small, [data-testid="stCaptionContainer"] {{ color: {MUTED} !important; }}
+hr {{ border: 0; border-top: 1px solid {BORDER}; margin: 2.2rem 0; }}
+
+.page-title {{
+    font-size: 2rem; font-weight: 300; letter-spacing: -0.03em; color: {TEXT};
+    line-height: 1.15;
+}}
+.page-sub {{ color: {MUTED}; font-size: 0.92rem; margin: 0.55rem 0 2.4rem 0; }}
+
+/* Stats */
+.stat {{ padding: 0.2rem 0 1.4rem 0; }}
+.stat-label {{
+    color: {MUTED}; font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+}}
+.stat-value {{
+    color: {TEXT}; font-size: 1.9rem; font-weight: 300;
+    letter-spacing: -0.03em; margin-top: 0.45rem; line-height: 1.1;
+}}
+.stat-note {{ color: {MUTED}; font-size: 0.78rem; margin-top: 0.4rem; }}
+
+/* Sidebar */
 [data-testid="stSidebar"] {{
-    background: #0F1621;
+    background: {BG};
     border-right: 1px solid {BORDER};
 }}
-[data-testid="stSidebar"] .block-container {{
-    padding-top: 1.5rem;
-}}
-h1, h2, h3, h4 {{
-    color: {TEXT} !important;
-    letter-spacing: -0.035em;
-}}
-p, label, li {{
-    color: #D4DCE7;
-}}
-small, .stCaption {{
-    color: {MUTED} !important;
-}}
-hr {{
-    border-color: {BORDER};
-}}
-[data-testid="stMetric"] {{
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid {BORDER};
-    border-radius: 0;
-    padding: 10px 4px 13px 4px;
-}}
-[data-testid="stMetricLabel"] {{
-    color: {MUTED} !important;
-}}
-[data-testid="stMetricValue"] {{
-    color: {TEXT} !important;
-}}
-[data-testid="stMetricDelta"] {{
-    font-size: 0.8rem;
-}}
-.stButton > button, .stDownloadButton > button {{
-    border-radius: 9px;
-    min-height: 2.55rem;
-    font-weight: 600;
-    border: 1px solid #40536D;
-    transition: all 0.15s ease;
-}}
-.stButton > button {{
-    background: #DCE8F2;
-    color: #101722;
-}}
-.stButton > button:hover {{
-    background: #BFD4E5;
-    color: #101722;
-    border-color: #BFD4E5;
-}}
-.stDownloadButton > button {{
-    background: #182536;
-    color: #EAF1F8;
-}}
-.stDownloadButton > button:hover {{
-    background: #24364B;
-    color: white;
-}}
-[data-testid="stDataFrame"], [data-testid="stTable"] {{
-    border: 0;
-    border-radius: 4px;
-    overflow: hidden;
-}}
-[data-testid="stFileUploader"] section {{
-    background: #101722;
-    border: 1px dashed #344255;
-    border-radius: 8px;
-}}
-[data-testid="stAlert"] {{
-    border-radius: 11px;
-}}
-[data-testid="stTabs"] button {{
-    color: {MUTED};
-}}
-[data-testid="stPlotlyChart"], [data-testid="stPyplot"], [data-testid="stVegaLiteChart"] {{
-    background: transparent;
-    border: 0;
-    border-radius: 4px;
-    padding: 0;
-}}
-div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-}}
-/* Sidebar radio navigation */
-[data-testid="stSidebar"] [role="radiogroup"] {{
-    gap: 5px;
-}}
+[data-testid="stSidebar"] .block-container {{ padding-top: 2.4rem; }}
+.brand {{ font-size: 1.05rem; font-weight: 500; letter-spacing: 0.02em; color: {TEXT}; }}
+.brand span {{ color: {ACCENT}; margin-right: 0.5rem; }}
+.brand-sub {{ color: {MUTED}; font-size: 0.74rem; margin: 0.3rem 0 2.4rem 0; }}
+
+[data-testid="stSidebar"] [role="radiogroup"] {{ gap: 0.15rem; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{
-    background: transparent;
-    border: 0;
-    border-radius: 5px;
-    padding: 8px 10px;
+    padding: 0.5rem 0.2rem; border-radius: 6px; cursor: pointer;
 }}
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {{
-    border-color: #40536D;
+[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {{ display: none; }}
+[data-testid="stSidebar"] [role="radiogroup"] label p {{
+    color: {MUTED}; font-size: 0.9rem; transition: color .15s ease;
 }}
-/* Compact section labels */
-.eyebrow {{
-    color: {ACCENT};
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
+[data-testid="stSidebar"] [role="radiogroup"] label:hover p {{ color: {TEXT}; }}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {{
+    color: {TEXT}; font-weight: 500;
 }}
-.hero {{
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid {BORDER};
-    border-radius: 0;
-    padding: 12px 0 22px 0;
-    margin: 4px 0 24px 0;
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
+    box-shadow: inset 2px 0 0 {ACCENT}; padding-left: 0.8rem;
 }}
-.hero-title {{
-    color: #F4F7FA;
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: -0.04em;
+
+/* Buttons */
+.stButton > button, .stDownloadButton > button {{
+    border-radius: 8px; min-height: 2.6rem; font-weight: 500; font-size: 0.88rem;
+    background: transparent; color: {TEXT}; border: 1px solid #34343A;
+    transition: all .15s ease;
 }}
-.hero-sub {{
-    color: #AAB8C9;
-    font-size: 0.95rem;
-    margin-top: 7px;
+.stButton > button:hover, .stDownloadButton > button:hover {{
+    border-color: {ACCENT}; color: {ACCENT}; background: transparent;
 }}
-.pill {{
-    display: inline-block;
-    border: 1px solid #38536A;
-    background: #1A2B3C;
-    color: #B9D6E9;
-    border-radius: 30px;
-    padding: 5px 10px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
+.stButton > button[kind="primary"], button[data-testid="stBaseButton-primary"] {{
+    background: {ACCENT}; color: #141412; border-color: {ACCENT};
 }}
-.info-card {{
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid {BORDER};
-    border-radius: 0;
-    padding: 12px 2px 14px 2px;
-    min-height: 92px;
+.stButton > button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover {{
+    background: #E2D6B7; color: #141412; border-color: #E2D6B7;
 }}
-.info-card-title {{
-    color: {MUTED};
-    font-size: 0.76rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+
+/* Inputs, uploader, tables, alerts */
+[data-testid="stFileUploader"] section {{
+    background: {SURFACE}; border: 1px dashed #34343A; border-radius: 10px;
 }}
-.info-card-value {{
-    color: {TEXT};
-    font-size: 1.35rem;
-    font-weight: 700;
-    margin-top: 9px;
+div[data-baseweb="select"] > div {{ background: {SURFACE}; border-color: {BORDER}; border-radius: 8px; }}
+[data-testid="stDataFrame"] {{ border: 1px solid {BORDER}; border-radius: 8px; overflow: hidden; }}
+[data-testid="stAlert"] {{
+    background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; color: {SOFT};
 }}
-.info-card-note {{
-    color: {MUTED};
-    font-size: 0.78rem;
-    margin-top: 4px;
-}}
-.footer {{
-    color: #728197;
-    font-size: 0.75rem;
-    border-top: 1px solid {BORDER};
-    padding-top: 14px;
-    margin-top: 28px;
-}}
+[data-testid="stExpander"] {{ border: 1px solid {BORDER}; border-radius: 10px; background: transparent; }}
+[data-testid="stProgress"] > div > div > div > div {{ background: {ACCENT}; }}
+
+.model-row {{ padding: 0.9rem 0; border-bottom: 1px solid {BORDER}; }}
+.model-row-head {{ display: flex; justify-content: space-between; font-size: 0.9rem; color: {TEXT}; }}
+.model-row-head span:last-child {{ color: {SOFT}; font-variant-numeric: tabular-nums; }}
+.bar-track {{ background: {BORDER}; height: 2px; margin-top: 0.8rem; }}
+.bar-fill {{ background: {ACCENT}; height: 2px; }}
+
+.step {{ display: flex; gap: 1.2rem; padding: 0.85rem 0; border-bottom: 1px solid {BORDER}; }}
+.step-n {{ color: {ACCENT}; font-size: 0.78rem; font-weight: 500; min-width: 1.4rem; padding-top: 0.15rem; }}
+.step-t {{ color: {TEXT}; font-size: 0.92rem; font-weight: 500; }}
+.step-d {{ color: {MUTED}; font-size: 0.8rem; margin-top: 0.2rem; }}
+
+.footer {{ color: #55555D; font-size: 0.72rem; margin-top: 4rem; letter-spacing: 0.04em; }}
 </style>
 """, unsafe_allow_html=True)
 
 
-def section_label(text):
-    st.markdown(f'<div class="eyebrow">{text}</div>', unsafe_allow_html=True)
+# ---------------------------------------------------------
+# UI helpers
+# ---------------------------------------------------------
+def page_header(title, subtitle=""):
+    st.markdown(
+        f'<div class="page-title">{title}</div><div class="page-sub">{subtitle}</div>',
+        unsafe_allow_html=True
+    )
 
 
-def info_card(label, value, note=""):
+def stat(label, value, note=""):
     st.markdown(
         f"""
-        <div class="info-card">
-            <div class="info-card-title">{label}</div>
-            <div class="info-card-value">{value}</div>
-            <div class="info-card-note">{note}</div>
+        <div class="stat">
+            <div class="stat-label">{label}</div>
+            <div class="stat-value">{value}</div>
+            <div class="stat-note">{note}</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
 
+def gap(rem=1.5):
+    st.markdown(f'<div style="height:{rem}rem"></div>', unsafe_allow_html=True)
+
+
 def styled_table(df):
     return (
         df.style
         .format(precision=3)
-        .set_properties(**{
-            "background-color": PANEL,
-            "color": TEXT,
-            "border-color": BORDER,
-            "padding": "8px"
-        })
+        .set_properties(**{"background-color": SURFACE, "color": SOFT, "border-color": BORDER})
         .set_table_styles([
             {"selector": "th", "props": [
-                ("background-color", "#202D3F"),
-                ("color", "#F3F6FA"),
-                ("font-weight", "700"),
-                ("border-color", BORDER),
-                ("padding", "10px")
-            ]},
-            {"selector": "td", "props": [("border-color", BORDER)]}
+                ("background-color", SURFACE), ("color", MUTED),
+                ("font-weight", "500"), ("border-color", BORDER)
+            ]}
         ])
     )
 
 
-def style_matplotlib(fig, ax):
+def style_matplotlib(fig, ax, grid=True):
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
-    ax.tick_params(colors="#D6DFEA", labelsize=8)
-    ax.xaxis.label.set_color("#C8D3E0")
-    ax.yaxis.label.set_color("#C8D3E0")
+    ax.tick_params(colors=MUTED, labelsize=8, length=0)
+    ax.xaxis.label.set_color(MUTED)
+    ax.yaxis.label.set_color(MUTED)
+    ax.xaxis.label.set_size(8)
+    ax.yaxis.label.set_size(8)
     ax.title.set_color(TEXT)
-    ax.grid(alpha=0.14, color="#B7C5D6")
-    for spine in ax.spines.values():
-        spine.set_color(BORDER)
+    ax.title.set_fontsize(10)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(BORDER)
+    if grid:
+        ax.grid(color=GRID, linewidth=0.8)
+        ax.set_axisbelow(True)
+    else:
+        ax.grid(False)
+
+
+def minimal_legend(ax, **kwargs):
+    ax.legend(frameon=False, fontsize=8, labelcolor=SOFT, **kwargs)
 
 
 # =========================================================
@@ -360,53 +303,41 @@ def get_metrics(y_true, y_pred, scores):
 
 
 # =========================================================
-# 4. SIDEBAR + HEADER
+# 4. SIDEBAR
 # =========================================================
 with st.sidebar:
-    st.markdown("## 🛡️ NETGUARD")
-    st.caption("AI NETWORK SECURITY")
-    st.divider()
-
-    page = st.radio(
-        "WORKSPACE",
-        [
-            "Overview",
-            "Intrusion Detection",
-            "Model Performance",
-            "Advanced Evaluation",
-            "Detection Results",
-            "About Project"
-        ],
-        label_visibility="visible"
+    st.markdown(
+        '<div class="brand"><span>◆</span>NetGuard</div>'
+        '<div class="brand-sub">Network intrusion detection</div>',
+        unsafe_allow_html=True
     )
 
-    st.divider()
-    st.markdown("**MODELS**")
-    st.caption("SVM  ·  CNN  ·  LSTM")
-    st.caption("UNSW-NB15 · Binary classification")
+    page = st.radio(
+        "Navigation",
+        [
+            "Overview",
+            "Detection",
+            "Performance",
+            "Evaluation",
+            "Results",
+            "About"
+        ],
+        label_visibility="collapsed"
+    )
 
-st.markdown(
-    """
-    <div class="hero">
-        <div class="eyebrow">AI-POWERED CYBERSECURITY ANALYTICS</div>
-        <div class="hero-title">Network Intrusion Detection</div>
-        <div class="hero-sub">
-            Analyze network traffic, identify potential attacks and compare
-            machine learning and deep learning models.
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    gap(2)
+    st.caption("SVM · CNN · LSTM")
+    st.caption("UNSW-NB15")
 
 
 # =========================================================
 # 5. OVERVIEW
 # =========================================================
 if page == "Overview":
-    section_label("Workspace / Overview")
-    st.header("Security at a glance")
-    st.caption("A dataset-based prototype for binary network traffic classification.")
+    page_header(
+        "Network intrusion detection",
+        "Classify network traffic as normal or attack, and compare three trained models."
+    )
 
     comparison = None
     try:
@@ -415,43 +346,42 @@ if page == "Overview":
     except Exception:
         pass
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        info_card("Detection models", "03", "SVM · CNN · LSTM")
+        stat("Models", "3", "SVM · CNN · LSTM")
     with c2:
-        info_card("Dataset", "UNSW-NB15", "Benchmark intrusion dataset")
+        stat("Dataset", "UNSW-NB15", "Benchmark intrusion data")
     with c3:
-        info_card("Classification", "Binary", "Normal or attack")
-    with c4:
-        info_card("Analysis mode", "CSV-based", "Uploaded traffic records")
+        stat("Task", "Binary", "Normal or attack")
 
-    st.write("")
-    left, right = st.columns([1.15, 0.85], gap="large")
+    gap(1)
+    left, right = st.columns([1, 1], gap="large")
 
     with left:
-        st.subheader("Analysis workflow")
+        st.subheader("Workflow")
         workflow = [
-            ("01", "Upload dataset", "Import a compatible UNSW-NB15 CSV file."),
-            ("02", "Preprocess features", "Apply the saved training preprocessing and scaler."),
-            ("03", "Run detection", "Choose SVM, CNN or LSTM to classify records."),
-            ("04", "Evaluate models", "Compare metrics, confusion matrices and curves.")
+            ("01", "Upload", "Import a compatible UNSW-NB15 CSV."),
+            ("02", "Preprocess", "Apply the saved scaler and feature pipeline."),
+            ("03", "Detect", "Run SVM, CNN or LSTM on the records."),
+            ("04", "Evaluate", "Compare metrics, matrices and curves.")
         ]
         for number, title, description in workflow:
             st.markdown(
                 f"""
-                <div style="padding:10px 0 12px 0; border-bottom:1px solid {BORDER};">
-                    <span style="color:{ACCENT}; font-size:0.76rem; font-weight:700;">{number}</span>
-                    <b style="color:#F2F5F9; margin-left:12px;">{title}</b>
-                    <div class="info-card-note" style="margin:5px 0 0 32px;">{description}</div>
+                <div class="step">
+                    <div class="step-n">{number}</div>
+                    <div>
+                        <div class="step-t">{title}</div>
+                        <div class="step-d">{description}</div>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
     with right:
-        st.subheader("Model snapshot")
+        st.subheader("Accuracy by model")
         if comparison is not None and not comparison.empty:
-            # Normalize common CSV column headings.
             aliases = {
                 "model": "Model",
                 "accuracy (%)": "Accuracy (%)",
@@ -464,15 +394,15 @@ if page == "Overview":
             )
             if {"Model", "Accuracy (%)"}.issubset(comparison.columns):
                 for _, row in comparison.iterrows():
+                    acc = float(row["Accuracy (%)"])
                     st.markdown(
                         f"""
-                        <div class="info-card" style="min-height:0; margin-bottom:9px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <b style="color:#F2F5F9;">{row['Model']}</b>
-                                <b style="color:#B9D6E9;">{float(row['Accuracy (%)']):.2f}%</b>
+                        <div class="model-row">
+                            <div class="model-row-head">
+                                <span>{row['Model']}</span><span>{acc:.2f}%</span>
                             </div>
-                            <div style="background:#28384B; height:6px; border-radius:8px; margin-top:10px;">
-                                <div style="background:#8DB7D8; width:{max(0,min(100,float(row['Accuracy (%)'])))}%; height:6px; border-radius:8px;"></div>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width:{max(0, min(100, acc))}%;"></div>
                             </div>
                         </div>
                         """,
@@ -483,25 +413,22 @@ if page == "Overview":
         else:
             st.info("The model_comparison.csv file was not found.")
 
-    st.divider()
-    st.subheader("Project scope")
-    st.info(
-        "This prototype analyzes uploaded CSV records. It does not capture live "
-        "network packets, continuously monitor a network, or automatically block attacks."
+    gap(1)
+    st.caption(
+        "This prototype analyzes uploaded CSV records. It does not capture live packets, "
+        "monitor a network continuously, or block attacks."
     )
 
 
 # =========================================================
-# 6. INTRUSION DETECTION
+# 6. DETECTION
 # =========================================================
-elif page == "Intrusion Detection":
-    section_label("Workspace / Detection")
-    st.header("Run intrusion detection")
-    st.caption("Upload a compatible dataset and select a trained model.")
+elif page == "Detection":
+    page_header("Detection", "Upload a compatible dataset and run a trained model.")
 
-    model_choice = st.selectbox("Detection model", ["SVM", "CNN", "LSTM"])
+    model_choice = st.selectbox("Model", ["SVM", "CNN", "LSTM"])
     uploaded_file = st.file_uploader(
-        "Upload network traffic CSV",
+        "Network traffic CSV",
         type=["csv"],
         help="Use a CSV with the same original feature columns as the UNSW-NB15 training data."
     )
@@ -511,25 +438,29 @@ elif page == "Intrusion Detection":
             raw_df = pd.read_csv(uploaded_file)
             st.session_state["uploaded_df"] = raw_df
 
-            st.markdown("#### Dataset preview")
+            gap(1)
             a, b, c = st.columns(3)
-            a.metric("Records", f"{len(raw_df):,}")
-            b.metric("Columns", f"{len(raw_df.columns):,}")
-            c.metric("File size", f"{uploaded_file.size / 1024:.1f} KB")
+            with a:
+                stat("Records", f"{len(raw_df):,}")
+            with b:
+                stat("Columns", f"{len(raw_df.columns):,}")
+            with c:
+                stat("File size", f"{uploaded_file.size / 1024:.1f} KB")
 
-            with st.expander("Preview first 10 rows", expanded=True):
+            with st.expander("Preview first 10 rows"):
                 st.dataframe(raw_df.head(10), use_container_width=True, height=260)
 
-            st.write("")
+            gap(0.5)
             run_col, eval_col = st.columns(2)
-
             with run_col:
-                run_clicked = st.button("Run selected model", use_container_width=True)
+                run_clicked = st.button(
+                    "Run selected model", type="primary", use_container_width=True
+                )
             with eval_col:
                 eval_clicked = st.button("Evaluate all three models", use_container_width=True)
 
             if run_clicked:
-                with st.spinner(f"Running {model_choice} detection..."):
+                with st.spinner(f"Running {model_choice}..."):
                     X_scaled = preprocess_data(raw_df)
                     start = time.perf_counter()
                     pred, scores = predict_model(model_choice, X_scaled)
@@ -583,63 +514,52 @@ elif page == "Intrusion Detection":
 
     if "results" in st.session_state:
         st.divider()
-        st.subheader("Latest detection summary")
+        st.subheader("Latest summary")
         pred = st.session_state["predictions"]
         total = len(pred)
         attacks = int(np.sum(pred == 1))
         normal = int(np.sum(pred == 0))
+
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Records analyzed", f"{total:,}")
-        m2.metric("Attack predictions", f"{attacks:,}")
-        m3.metric("Normal predictions", f"{normal:,}")
-        m4.metric("Prediction time", f"{st.session_state.get('prediction_time', 0):.2f}s")
+        with m1:
+            stat("Records", f"{total:,}")
+        with m2:
+            stat("Attacks", f"{attacks:,}")
+        with m3:
+            stat("Normal", f"{normal:,}")
+        with m4:
+            stat("Time", f"{st.session_state.get('prediction_time', 0):.2f}s",
+                 st.session_state.get("selected_model", ""))
 
-        chart_col, details_col = st.columns([0.8, 1.2], gap="large")
-        with chart_col:
-            st.markdown("#### Traffic classification")
-            fig, ax = plt.subplots(figsize=(4.2, 2.8))
-            ax.bar(["Normal", "Attack"], [normal, attacks], color=[TEAL, RED], width=0.55)
-            ax.set_ylabel("Records")
-            ax.set_title("Predicted traffic distribution")
-            style_matplotlib(fig, ax)
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
+        if total:
+            st.progress(attacks / total, text=f"{attacks / total * 100:.1f}% predicted as attacks")
 
-        with details_col:
-            st.markdown("#### Detection details")
-            st.markdown(
-                f"""
-                <div class="info-card" style="min-height:0; margin-bottom:10px;">
-                    <div class="info-card-title">Model selected</div>
-                    <div class="info-card-value">{st.session_state.get('selected_model', '—')}</div>
-                    <div class="info-card-note">Source: {st.session_state.get('detection_source_name', 'Uploaded CSV')}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            if total:
-                st.progress(attacks / total, text=f"{attacks / total * 100:.1f}% of records predicted as attacks")
+        gap(1)
+        fig, ax = plt.subplots(figsize=(6.5, 2.0))
+        ax.barh(["Normal", "Attack"], [normal, attacks], color=[NORMAL, ATTACK], height=0.5)
+        ax.invert_yaxis()
+        style_matplotlib(fig, ax)
+        ax.grid(axis="y", visible=False)
+        fig.tight_layout()
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
 
-        with st.expander("View complete prediction table"):
+        with st.expander("Prediction table"):
             st.dataframe(st.session_state["results"], use_container_width=True, height=350)
 
         st.download_button(
-            "Download detection results",
+            "Download results",
             st.session_state["results"].to_csv(index=False),
             "intrusion_detection_results.csv",
-            "text/csv",
-            use_container_width=False
+            "text/csv"
         )
 
 
 # =========================================================
-# 7. MODEL PERFORMANCE
+# 7. PERFORMANCE
 # =========================================================
-elif page == "Model Performance":
-    section_label("Workspace / Model analytics")
-    st.header("Model performance")
-    st.caption("Compare the three trained models using the held-out test results.")
+elif page == "Performance":
+    page_header("Performance", "Held-out test results for the three trained models.")
 
     try:
         comp = pd.read_csv("model_comparison.csv")
@@ -699,12 +619,16 @@ elif page == "Model Performance":
         fastest_pred = comp.loc[comp["Prediction Time (s)"].idxmin()]
 
         k1, k2, k3 = st.columns(3)
-        k1.metric("Highest accuracy", str(best_acc["Model"]), f"{best_acc['Accuracy (%)']:.2f}%")
-        k2.metric("Best attack F1-score", str(best_f1["Model"]), f"{best_f1['F1 Score (attack)']:.3f}")
-        k3.metric("Fastest prediction", str(fastest_pred["Model"]), f"{fastest_pred['Prediction Time (s)']:.2f}s")
+        with k1:
+            stat("Highest accuracy", str(best_acc["Model"]), f"{best_acc['Accuracy (%)']:.2f}%")
+        with k2:
+            stat("Best attack F1", str(best_f1["Model"]), f"{best_f1['F1 Score (attack)']:.3f}")
+        with k3:
+            stat("Fastest prediction", str(fastest_pred["Model"]),
+                 f"{fastest_pred['Prediction Time (s)']:.2f}s")
 
         st.divider()
-        st.subheader("Complete comparison")
+        st.subheader("Comparison")
         st.dataframe(styled_table(comp[required]), use_container_width=True, hide_index=True)
 
         st.divider()
@@ -713,12 +637,12 @@ elif page == "Model Performance":
             "Accuracy (%)", "Precision (attack)",
             "Recall (attack)", "F1 Score (attack)"
         ]
-        fig, ax = plt.subplots(figsize=(8.5, 3.6))
+        fig, ax = plt.subplots(figsize=(8.5, 3.4))
         x = np.arange(len(comp))
         width = 0.18
-        palette = [ACCENT, TEAL, GOLD, RED]
-        # Convert ratio-based metrics to percentages so all four
-        # metrics are shown on the same 0-100 scale.
+        palette = ["#4A4A52", "#7C7C86", "#B4B4BC", ACCENT]
+
+        # Ratio-based metrics converted to percentages: one 0-100 scale.
         plot_values = comp[metric_cols].copy()
         for metric in ["Precision (attack)", "Recall (attack)", "F1 Score (attack)"]:
             plot_values[metric] = plot_values[metric] * 100
@@ -728,60 +652,62 @@ elif page == "Model Performance":
                 x + (i - 1.5) * width,
                 plot_values[metric],
                 width,
-                label=metric.replace(" (%)", ""),
+                label=metric.replace(" (%)", "").replace(" (attack)", ""),
                 color=palette[i]
             )
         ax.set_xticks(x)
         ax.set_xticklabels(comp["Model"])
         ax.set_ylabel("Score (%)")
         ax.set_ylim(0, 105)
-        ax.set_title("Model metric comparison")
-        ax.legend(fontsize=8, ncol=2, facecolor=PANEL_ALT, edgecolor=BORDER, labelcolor=TEXT)
         style_matplotlib(fig, ax)
+        ax.grid(axis="x", visible=False)
+        minimal_legend(ax, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.14))
         fig.tight_layout()
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
-        left, right = st.columns(2)
+        gap(1)
+        left, right = st.columns(2, gap="large")
         with left:
             st.subheader("Training time")
-            fig, ax = plt.subplots(figsize=(5, 2.8))
-            ax.bar(comp["Model"], comp["Training Time (s)"], color=ACCENT, width=0.55)
+            fig, ax = plt.subplots(figsize=(5, 2.6))
+            ax.bar(comp["Model"], comp["Training Time (s)"], color=SOFT, width=0.45)
             ax.set_ylabel("Seconds")
-            ax.set_title("Model training time")
             style_matplotlib(fig, ax)
+            ax.grid(axis="x", visible=False)
             fig.tight_layout()
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
         with right:
             st.subheader("Prediction time")
-            fig, ax = plt.subplots(figsize=(5, 2.8))
-            ax.bar(comp["Model"], comp["Prediction Time (s)"], color=TEAL, width=0.55)
+            fig, ax = plt.subplots(figsize=(5, 2.6))
+            ax.bar(comp["Model"], comp["Prediction Time (s)"], color=ACCENT, width=0.45)
             ax.set_ylabel("Seconds")
-            ax.set_title("Model prediction time")
             style_matplotlib(fig, ax)
+            ax.grid(axis="x", visible=False)
             fig.tight_layout()
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        st.divider()
-        st.subheader("Interpretation")
-        st.markdown(
-            """
-            - **Accuracy** measures the proportion of all records classified correctly.
-            - **Attack precision** measures how many records predicted as attacks were actually attacks.
-            - **Attack recall** measures how many actual attacks were detected.
-            - **Attack F1-score** balances attack precision and attack recall.
-            - **Training and prediction time** show computational cost in the recorded experiment.
-            """
-        )
+        gap(1)
+        with st.expander("How to read these metrics"):
+            st.markdown(
+                """
+                - *Accuracy*: share of all records classified correctly.
+                - *Precision*: of records predicted as attacks, how many truly were.
+                - *Recall*: of actual attacks, how many were detected.
+                - *F1 score*: balance between attack precision and recall.
+                - *Training / prediction time*: computational cost in the recorded experiment.
+                """
+            )
+
         st.download_button(
-            "Download comparison report",
+            "Download comparison",
             comp[required].to_csv(index=False),
             "model_comparison_report.csv",
             "text/csv"
         )
-        st.caption("The comparison values are read from model_comparison.csv and reflect the recorded held-out test evaluation.")
+        st.caption("Values are read from model_comparison.csv and reflect the recorded held-out test evaluation.")
 
     except FileNotFoundError:
         st.error("model_comparison.csv was not found in the repository.")
@@ -791,19 +717,17 @@ elif page == "Model Performance":
 
 
 # =========================================================
-# 8. ADVANCED EVALUATION
+# 8. EVALUATION
 # =========================================================
-elif page == "Advanced Evaluation":
-    section_label("Workspace / Evaluation")
-    st.header("Advanced evaluation")
-    st.caption("Confusion matrices, ROC curves and precision-recall curves.")
+elif page == "Evaluation":
+    page_header("Evaluation", "Confusion matrices, ROC curves and precision-recall curves.")
 
     actual = st.session_state.get("uploaded_labels")
     all_results = st.session_state.get("all_model_results")
 
     if actual is None or all_results is None:
         st.info(
-            "Upload the labelled UNSW-NB15 testing CSV in Intrusion Detection "
+            "Upload the labelled UNSW-NB15 testing CSV on the Detection page "
             "and select 'Evaluate all three models' first."
         )
     else:
@@ -814,28 +738,32 @@ elif page == "Advanced Evaluation":
             st.warning("Both normal and attack labels are needed for these evaluation plots.")
         else:
             actual = actual.astype(int)
+            palette = {"SVM": NORMAL, "CNN": SOFT, "LSTM": ACCENT}
+            mono_cmap = LinearSegmentedColormap.from_list("mono", [BG, "#3A362B", ACCENT])
 
-            st.subheader("01 · Confusion matrix comparison")
-            matrix_cols = st.columns(3)
+            st.subheader("Confusion matrices")
+            matrix_cols = st.columns(3, gap="large")
             for index, name in enumerate(["SVM", "CNN", "LSTM"]):
                 pred = all_results[name]["predictions"]
                 cm = confusion_matrix(actual, pred, labels=[0, 1])
-                fig, ax = plt.subplots(figsize=(3.1, 2.65))
-                ax.imshow(cm, cmap="Blues")
-                ax.set_title(name, fontsize=11, fontweight="bold")
-                ax.set_xlabel("Predicted")
-                ax.set_ylabel("Actual")
+                fig, ax = plt.subplots(figsize=(3.1, 2.7))
+                ax.imshow(cm, cmap=mono_cmap)
+                ax.set_title(name, loc="left")
                 ax.set_xticks([0, 1], ["Normal", "Attack"])
                 ax.set_yticks([0, 1], ["Normal", "Attack"])
+                ax.set_xlabel("Predicted")
+                ax.set_ylabel("Actual")
                 for row in range(2):
                     for col in range(2):
                         ax.text(
                             col, row, f"{cm[row, col]:,}",
                             ha="center", va="center",
-                            color="white" if cm[row, col] > cm.max() / 2 else "#142033",
-                            fontsize=9, fontweight="bold"
+                            color="#141412" if cm[row, col] > cm.max() * 0.6 else TEXT,
+                            fontsize=9, fontweight="medium"
                         )
-                style_matplotlib(fig, ax)
+                style_matplotlib(fig, ax, grid=False)
+                for spine in ax.spines.values():
+                    spine.set_visible(False)
                 fig.tight_layout()
                 with matrix_cols[index]:
                     st.pyplot(fig, use_container_width=True)
@@ -845,43 +773,40 @@ elif page == "Advanced Evaluation":
             roc_col, pr_col = st.columns(2, gap="large")
 
             with roc_col:
-                st.subheader("02 · ROC curves")
+                st.subheader("ROC curves")
                 fig, ax = plt.subplots(figsize=(5.2, 3.4))
-                palette = {"SVM": ACCENT, "CNN": TEAL, "LSTM": GOLD}
                 for name in ["SVM", "CNN", "LSTM"]:
                     scores = all_results[name]["scores"]
                     fpr, tpr, _ = roc_curve(actual, scores)
                     auc = roc_auc_score(actual, scores)
-                    ax.plot(fpr, tpr, label=f"{name} · AUC {auc:.3f}", color=palette[name], linewidth=2)
-                ax.plot([0, 1], [0, 1], "--", color=MUTED, linewidth=1)
+                    ax.plot(fpr, tpr, label=f"{name}  {auc:.3f}", color=palette[name], linewidth=1.6)
+                ax.plot([0, 1], [0, 1], "--", color=BORDER, linewidth=1)
                 ax.set_xlabel("False positive rate")
                 ax.set_ylabel("True positive rate")
-                ax.set_title("Receiver operating characteristic")
-                ax.legend(fontsize=8, facecolor=PANEL_ALT, edgecolor=BORDER, labelcolor=TEXT)
                 style_matplotlib(fig, ax)
+                minimal_legend(ax, loc="lower right")
                 fig.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
             with pr_col:
-                st.subheader("03 · Precision-recall curves")
+                st.subheader("Precision-recall curves")
                 fig, ax = plt.subplots(figsize=(5.2, 3.4))
                 for name in ["SVM", "CNN", "LSTM"]:
                     scores = all_results[name]["scores"]
                     precision, recall, _ = precision_recall_curve(actual, scores)
                     ap = average_precision_score(actual, scores)
-                    ax.plot(recall, precision, label=f"{name} · AP {ap:.3f}", color=palette[name], linewidth=2)
+                    ax.plot(recall, precision, label=f"{name}  {ap:.3f}", color=palette[name], linewidth=1.6)
                 ax.set_xlabel("Recall")
                 ax.set_ylabel("Precision")
-                ax.set_title("Precision-recall comparison")
-                ax.legend(fontsize=8, facecolor=PANEL_ALT, edgecolor=BORDER, labelcolor=TEXT)
                 style_matplotlib(fig, ax)
+                minimal_legend(ax, loc="lower left")
                 fig.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
             st.divider()
-            st.subheader("04 · Advanced metrics")
+            st.subheader("Metrics")
             rows = []
             for name in ["SVM", "CNN", "LSTM"]:
                 pred = all_results[name]["predictions"]
@@ -895,27 +820,25 @@ elif page == "Advanced Evaluation":
             ]
             st.dataframe(styled_table(metrics_df), use_container_width=True, hide_index=True)
             st.download_button(
-                "Download advanced evaluation",
+                "Download evaluation",
                 metrics_df.to_csv(index=False),
                 "advanced_evaluation_report.csv",
                 "text/csv"
             )
             st.caption(
-                "CNN and LSTM scores are sigmoid outputs. SVM scores are decision-function values. "
-                "The curves are calculated from the uploaded dataset labels."
+                "CNN and LSTM scores are sigmoid outputs; SVM scores are decision-function values. "
+                "Curves are calculated from the uploaded dataset labels."
             )
 
 
 # =========================================================
-# 9. DETECTION RESULTS
+# 9. RESULTS
 # =========================================================
-elif page == "Detection Results":
-    section_label("Workspace / Results")
-    st.header("Detection results")
-    st.caption("Review and export the most recent model predictions.")
+elif page == "Results":
+    page_header("Results", "Review and export the most recent predictions.")
 
     if "results" not in st.session_state:
-        st.info("No saved detection results. Run a model from the Intrusion Detection page first.")
+        st.info("No saved results yet. Run a model on the Detection page first.")
     else:
         output = st.session_state["results"]
         pred = st.session_state["predictions"]
@@ -923,29 +846,29 @@ elif page == "Detection Results":
         attacks = int(np.sum(pred == 1))
         normal = int(np.sum(pred == 0))
 
-        a, b, c = st.columns(3)
-        a.metric("Total records", f"{total:,}")
-        b.metric("Predicted attacks", f"{attacks:,}")
-        c.metric("Predicted normal", f"{normal:,}")
+        a, b, c, d = st.columns(4)
+        with a:
+            stat("Records", f"{total:,}")
+        with b:
+            stat("Attacks", f"{attacks:,}")
+        with c:
+            stat("Normal", f"{normal:,}")
+        with d:
+            stat("Model", st.session_state.get("selected_model", "—"))
 
-        st.markdown(
-            f'<span class="pill">MODEL · {st.session_state.get("selected_model", "—")}</span>',
-            unsafe_allow_html=True
-        )
-        st.write("")
-        st.subheader("Prediction distribution")
-        fig, ax = plt.subplots(figsize=(6.5, 2.8))
-        ax.barh(["Normal", "Attack"], [normal, attacks], color=[TEAL, RED], height=0.48)
-        ax.set_xlabel("Number of records")
-        ax.set_title("Predicted traffic classes")
+        fig, ax = plt.subplots(figsize=(6.5, 2.0))
+        ax.barh(["Normal", "Attack"], [normal, attacks], color=[NORMAL, ATTACK], height=0.5)
+        ax.invert_yaxis()
+        ax.set_xlabel("Records")
         style_matplotlib(fig, ax)
+        ax.grid(axis="y", visible=False)
         fig.tight_layout()
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
         st.divider()
-        st.subheader("Prediction records")
-        filter_choice = st.selectbox("Filter records", ["All records", "Attack only", "Normal only"])
+        st.subheader("Records")
+        filter_choice = st.selectbox("Filter", ["All records", "Attack only", "Normal only"])
         if filter_choice == "Attack only":
             view = output[output["Predicted Label"] == 1]
         elif filter_choice == "Normal only":
@@ -964,74 +887,49 @@ elif page == "Detection Results":
 
 
 # =========================================================
-# 10. ABOUT PROJECT
+# 10. ABOUT
 # =========================================================
-elif page == "About Project":
-    section_label("Workspace / Project information")
-    st.header("About this project")
-
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="eyebrow">M.TECH · AI / MACHINE LEARNING</div>
-            <div class="hero-title">AI-Based Network Intrusion Detection</div>
-            <div class="hero-sub">
-                A comparative study of Support Vector Machine, Convolutional
-                Neural Network and Long Short-Term Memory models for
-                classifying network traffic.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+elif page == "About":
+    page_header(
+        "About",
+        "AI-based network intrusion detection · M.Tech, AI / Machine Learning"
     )
 
     st.subheader("Objective")
     st.write(
-        "To build a dataset-based intrusion detection prototype that classifies "
-        "network traffic records into normal and attack categories, and compares "
-        "the performance of three supervised learning models."
+        "A dataset-based prototype that classifies network traffic records as "
+        "normal or attack, and compares three supervised learning models."
     )
 
-    st.divider()
-    st.subheader("Models used")
+    gap(1)
+    st.subheader("Models")
     m1, m2, m3 = st.columns(3)
     with m1:
-        info_card("SVM", "Support Vector Machine", "Supervised machine learning")
+        stat("SVM", "Support Vector Machine", "Supervised machine learning")
     with m2:
-        info_card("CNN", "Convolutional Neural Network", "Deep learning architecture")
+        stat("CNN", "Convolutional Neural Network", "Deep learning")
     with m3:
-        info_card("LSTM", "Long Short-Term Memory", "Recurrent neural network architecture")
+        stat("LSTM", "Long Short-Term Memory", "Recurrent neural network")
 
-    st.divider()
     st.subheader("Dataset")
     st.write(
-        "**UNSW-NB15** is used as the network traffic dataset. "
+        "UNSW-NB15 is used as the network traffic dataset. "
         "The prepared CSV files contain labelled normal and attack records."
     )
 
-    st.subheader("Technology stack")
-    st.write(
-        "Python · Pandas · NumPy · Scikit-learn · TensorFlow/Keras · "
-        "Matplotlib · Streamlit"
-    )
+    gap(1)
+    st.subheader("Stack")
+    st.write("Python · Pandas · NumPy · Scikit-learn · TensorFlow/Keras · Matplotlib · Streamlit")
 
-    st.warning(
-        "Scope limitation: this prototype predicts labels for uploaded CSV records. "
-        "It does not perform live packet capture, real-time network monitoring, "
-        "or automatic attack blocking. CNN and LSTM receive feature-wise reshaped "
-        "records, not a verified time-ordered network-flow sequence."
+    gap(1)
+    st.caption(
+        "Scope: this prototype predicts labels for uploaded CSV records. It does not perform "
+        "live packet capture, real-time monitoring, or automatic attack blocking. CNN and LSTM "
+        "receive feature-wise reshaped records, not a verified time-ordered flow sequence."
     )
 
 
 # =========================================================
 # 11. FOOTER
 # =========================================================
-st.markdown(
-    """
-    <div class="footer">
-        NETGUARD · AI NETWORK INTRUSION DETECTION
-        <span style="float:right;">UNSW-NB15 · SVM · CNN · LSTM</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown('<div class="footer">NETGUARD · UNSW-NB15 · SVM · CNN · LSTM</div>', unsafe_allow_html=True)
