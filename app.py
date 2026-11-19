@@ -33,7 +33,7 @@ MUTED = "#9699BF"
 SOFT = "#B4B4BC"
 
 # Pastel palette
-BLUE = "#9CC9F0"        # light blue
+BLUE = "#88A9C3"        # light blue
 YELLOW = "#F3E2A0"      # light yellow
 LAVENDER = "#C3B1E8"    # lavender
 ORANGE = "#F5B98A"      # light orange
