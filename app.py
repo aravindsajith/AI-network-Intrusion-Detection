@@ -35,7 +35,7 @@ SOFT = "#B4B4BC"
 # Pastel palette
 BLUE = "#88A9C3"        # light blue
 YELLOW = "#CBC8B1"      # light yellow
-LAVENDER = "#C3B1E8"    # lavender
+LAVENDER = "#EAEBFF"    # lavender
 ORANGE = "#F5B98A"      # light orange
 GREY = "#8E8E96"        # grey
 
